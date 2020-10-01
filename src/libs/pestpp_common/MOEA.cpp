@@ -57,6 +57,7 @@ void ParetoObjectives::update_member_struct(ObservationEnsemble& op, ParameterEn
 
 
 	//map<string, map<string, double>> member_struct;
+
 	for (auto real_name : real_names)
 	{
 		map<string, double> obj_map;
@@ -90,6 +91,7 @@ void ParetoObjectives::update_member_struct(ObservationEnsemble& op, ParameterEn
 	}
 
 }
+
 
 void ParetoObjectives::drop_duplicates(ObservationEnsemble& op, ParameterEnsemble& dp)
 {
@@ -133,22 +135,25 @@ void ParetoObjectives::drop_duplicates(ObservationEnsemble& op, ParameterEnsembl
 	}
 }
 
-pair<vector<string>, vector<string>> ParetoObjectives::pareto_dominance_sort(ObservationEnsemble& op, ParameterEnsemble& dp)
+pair<vector<string>, vector<string>> ParetoObjectives::pareto_dominance_sort(ObservationEnsemble& op, ParameterEnsemble& dp, bool report)
 {
 	stringstream ss;
 	ss << "ParetoObjectives::pareto_dominance_sort() for " << op.shape().first << " population members";
 	performance_log->log_event(ss.str());
 	performance_log->log_event("preparing fast-lookup containers");
 
-	
 
-	//TODO: check for a single objective and deal appropriately
+	ofstream& frec = file_manager.rec_ofstream();
+    	//TODO: check for a single objective and deal appropriately
 
 	//update the member struct container
 	update_member_struct(op, dp);
 
+
+
 	//check for and drop duplictes
 	drop_duplicates(op, dp);
+
 	
 	vector<string> real_names = op.get_real_names();
 	vector<string> infeas_ordered;
@@ -195,7 +200,7 @@ pair<vector<string>, vector<string>> ParetoObjectives::pareto_dominance_sort(Obs
 		{
 			ss.str("");
 			ss << "WARNING: all members are infeasible" << endl;
-			file_manager.rec_ofstream() << ss.str();
+			frec << ss.str();
 			cout << ss.str();
 		}
 		member_struct = feas_member_struct;
@@ -216,11 +221,11 @@ pair<vector<string>, vector<string>> ParetoObjectives::pareto_dominance_sort(Obs
 
 	map<int, vector<string>> front_map = sort_members_by_dominance_into_fronts(member_struct);
 	performance_log->log_event("sorting done");
-	ofstream& frec = file_manager.rec_ofstream();
 	
 	frec << "...pareto dominance sort yielded " << front_map.size() << " domination fronts" << endl;
 	for (auto front : front_map)
 	{
+
 		if (front.second.size() == 0)
 		{
 			ss.str("");
@@ -228,6 +233,7 @@ pair<vector<string>, vector<string>> ParetoObjectives::pareto_dominance_sort(Obs
 			performance_log->log_event(ss.str());
 			throw runtime_error(ss.str());
 		}
+
 		frec << front.second.size() << " in the front " << front.first << endl;
 	}
 
@@ -406,12 +412,14 @@ map<int,vector<string>> ParetoObjectives::sort_members_by_dominance_into_fronts(
 		{
 			if (solution_p.first == solution_q.first) //string compare real name
 				continue;
+
 			//if the solutions are identical...
 			if (first_equals_second(solution_p.second, solution_q.second))
 			{
 				throw runtime_error("ParetoObjectives::sort_members_by_dominance_into_fronts(): solution '" + solution_p.first + "' and '" + solution_q.first + "' are identical");
 			}
 			else if (first_dominates_second(solution_p.second, solution_q.second))
+
 			{
 				solutions_dominated.push_back(solution_q.first);
 			}
@@ -419,7 +427,6 @@ map<int,vector<string>> ParetoObjectives::sort_members_by_dominance_into_fronts(
 			{
 				domination_counter++;
 			}
-			
 
 		}
 		//solution_p is in the first front
@@ -438,7 +445,9 @@ map<int,vector<string>> ParetoObjectives::sort_members_by_dominance_into_fronts(
 	map<int, vector<string>> front_map;
 	front_map[1] = first_front;
 	vector<string> front = first_front;
+
 	int num_front_solutions = front.size();
+
 	while (true)
 	{
 		
@@ -459,6 +468,7 @@ map<int,vector<string>> ParetoObjectives::sort_members_by_dominance_into_fronts(
 		front_map[i] = q_front;
 		
 		front = q_front;
+
 		num_front_solutions += front.size();
 	}
 	
@@ -564,6 +574,188 @@ void MOEA::throw_moea_error(const string& message)
 	throw runtime_error("MOEA error: " + message);
 }
 
+int MOEA::get_max_len_obj_name()
+{
+	int max_len = 20;
+	for (auto obs_obj : obs_obj_names)
+	{
+		max_len = max(int(obs_obj.size()), max_len);
+	}
+	for (auto pi_obj : pi_obj_names)
+	{
+		max_len = max(int(pi_obj.size()), max_len);
+	}
+	return max_len;
+}
+
+map<string, map<string, double>> MOEA::obj_func_report(ParameterEnsemble& _dp, ObservationEnsemble& _op)
+{
+	map<string, map<string, double>> summary = get_obj_func_summary_stats(_dp, _op);
+	stringstream frec;
+	//frec << endl << "  ---  Objective Function Summary  ---  " << endl;
+
+	int max_len = get_max_len_obj_name();
+	string dir;
+	frec << left << setw(max_len) << "objective function" << right << setw(10) << "direction" << setw(10) << "mean" << setw(20) << "standard devation" << setw(12) << "min" << setw(12) << "max" << endl;
+	for (auto obs_obj : obs_obj_names)
+	{
+
+		frec << left << setw(max_len) << obs_obj;
+		dir = "minimize";
+		if (obj_dir_mult[obs_obj] == -1)
+			dir = "maximize";
+		frec << right << setw(10) << dir;
+		frec << right << setw(10) << summary[obs_obj]["mean"];
+		frec << setw(20) << summary[obs_obj]["std"];
+		frec << setw(12) << summary[obs_obj]["min"];
+		frec << setw(12) << summary[obs_obj]["max"] << endl;
+	}
+
+	
+	for (auto pi_obj : pi_obj_names)
+	{
+		frec << left << setw(max_len) << pi_obj;
+		dir = "minimize";
+		if (obj_dir_mult[pi_obj] == -1)
+			dir = "maximize";
+		frec << right << setw(10) << dir;
+		frec << right << setw(10) << summary[pi_obj]["mean"];
+		frec << setw(20) << summary[pi_obj]["std"];
+		frec << setw(12) << summary[pi_obj]["min"];
+		frec << setw(12) << summary[pi_obj]["max"] << endl;
+	}
+
+	frec << endl;
+	file_manager.rec_ofstream() << frec.str();
+	cout << frec.str();
+	return summary;
+}
+
+map<string, map<string, double>> MOEA::obj_func_change_report(map<string, map<string, double>>& current_obj_summary)
+{
+	map<string, map<string, double>> change_summary;
+	if (previous_obj_summary.size() == 0)
+		return change_summary;
+	double change, percent_change;
+	
+	stringstream ss;
+	int max_len = get_max_len_obj_name();
+	ss << left << setw(max_len) << "objective function" << right << setw(15) << "mean change";
+	ss << setw(15) << "% mean change" << setw(15) << "stdev change" << setw(15) << "% stdev change" << endl;
+
+
+	for (auto obs_obj : obs_obj_names)
+	{
+		change_summary[obs_obj] = map<string, double>();
+		if (previous_obj_summary.find(obs_obj) == previous_obj_summary.end())
+			throw_moea_error("obj_func_change_report() error: obs obj '" + obs_obj + "' not in previous summary");
+		if (current_obj_summary.find(obs_obj) == current_obj_summary.end())
+			throw_moea_error("obj_func_change_report() error: obs obj '" + obs_obj + "' not in current summary");
+		change = previous_obj_summary[obs_obj]["mean"] - current_obj_summary[obs_obj]["mean"];
+		percent_change = 100.0 * (change / previous_obj_summary[obs_obj]["mean"]);
+		ss << left << setw(max_len) << obs_obj;
+		ss << right << setw(15) << change;
+		ss << setw(15) << percent_change;
+		change_summary[obs_obj]["mean"] = change;
+		change_summary[obs_obj]["mean_percent"] = percent_change;
+
+		change = previous_obj_summary[obs_obj]["std"] - current_obj_summary[obs_obj]["std"];
+		percent_change = 100.0 * (change / previous_obj_summary[obs_obj]["std"]);
+		ss << setw(15) << change;
+		ss << setw(15) << percent_change;
+		change_summary[obs_obj]["std"] = change;
+		change_summary[obs_obj]["std_percent"] = percent_change;
+		ss << endl;
+
+	}
+	for (auto pi_obj : pi_obj_names)
+	{
+		change_summary[pi_obj] = map<string, double>();
+		if (previous_obj_summary.find(pi_obj) == previous_obj_summary.end())
+			throw_moea_error("obj_func_change_report() error: pi obj '" + pi_obj + "' not in previous summary");
+		if (current_obj_summary.find(pi_obj) == current_obj_summary.end())
+			throw_moea_error("obj_func_change_report() error: pi obj '" + pi_obj + "' not in current summary");
+		change = previous_obj_summary[pi_obj]["mean"] - current_obj_summary[pi_obj]["mean"];
+		percent_change = 100.0 * (change / previous_obj_summary[pi_obj]["mean"]);
+		ss << left << setw(max_len) << pi_obj;
+		ss << right << setw(15) << change;
+		ss << setw(15) << percent_change;
+		change_summary[pi_obj]["mean"] = change;
+		change_summary[pi_obj]["mean_percent"] = percent_change;
+
+		change = previous_obj_summary[pi_obj]["std"] - current_obj_summary[pi_obj]["std"];
+		percent_change = 100.0 * (change / previous_obj_summary[pi_obj]["std"]);
+		ss << setw(15) << change;
+		ss << setw(15) << percent_change;
+		change_summary[pi_obj]["std"] = change;
+		change_summary[pi_obj]["std_percent"] = percent_change;
+		ss << endl;
+	}
+	file_manager.rec_ofstream() << ss.str() << endl;
+	cout << ss.str() << endl;
+	return change_summary;
+}
+
+map<string, map<string, double>> MOEA::get_obj_func_summary_stats(ParameterEnsemble& _dp, ObservationEnsemble& _op)
+{
+
+	pair<map<string, double>, map<string, double>> mm = _op.get_moment_maps();
+	_op.update_var_map();
+	map<string, int> var_map = _op.get_var_map();
+	map<string, double> sum;
+	map<string, map<string, double>> summary_stats;
+	for (auto obs_obj : obs_obj_names)
+	{
+		sum.clear();
+		sum["mean"] = mm.first[obs_obj];
+		sum["std"] = mm.second[obs_obj];
+		sum["min"] = _op.get_eigen_ptr()->col(var_map[obs_obj]).minCoeff();
+		sum["max"] = _op.get_eigen_ptr()->col(var_map[obs_obj]).maxCoeff();
+		summary_stats[obs_obj] = sum;
+	}
+
+	mm = _dp.get_moment_maps();
+	_dp.update_var_map();
+	var_map = _dp.get_var_map();
+	vector<string> dp_names = _dp.get_var_names();
+	Parameters pars = pest_scenario.get_ctl_parameters();
+	ParamTransformSeq pts = pest_scenario.get_base_par_tran_seq();
+	pts.ctl2numeric_ip(pars);
+	_dp.transform_ip(ParameterEnsemble::transStatus::NUM);
+	Eigen::VectorXd vec;
+	pair<double, double> sim_res;
+	map<string, vector<double>> pi_vals;
+	PriorInformation* prior_info_ptr = pest_scenario.get_prior_info_ptr();
+	for (auto pi_obj : pi_obj_names)
+		pi_vals[pi_obj] = vector<double>();
+	for (int i = 0; i < _dp.shape().first; i++)
+	{
+		vec = _dp.get_eigen_ptr()->row(i);
+		pts.ctl2numeric_ip(pars);
+		pars.update_without_clear(dp_names, vec);
+		pts.numeric2ctl_ip(pars);
+		
+		for (auto pi_obj : pi_obj_names)
+		{
+			sim_res = prior_info_ptr->get_pi_rec_ptr(pi_obj).calc_sim_and_resid(pars);
+			pi_vals[pi_obj].push_back(sim_res.first);
+		}
+	}
+
+	for (auto pi_obj : pi_obj_names)
+	{
+		vec = stlvec_2_eigenvec(pi_vals[pi_obj]);
+		sum.clear();
+		sum["mean"] = vec.mean();
+		sum["std"] = sqrt((vec.array() - vec.mean()).pow(2).sum() / (vec.size() - 1));
+		sum["min"] = vec.minCoeff();
+		sum["max"] = vec.maxCoeff();
+		summary_stats[pi_obj] = sum;
+	}
+	return summary_stats;
+}
+
+
 void MOEA::sanity_checks()
 {
 	PestppOptions* ppo = pest_scenario.get_pestpp_options_ptr();
@@ -668,91 +860,44 @@ void MOEA::update_archive(ObservationEnsemble& _op, ParameterEnsemble& _dp)
 }
 
 
-void MOEA::queue_chance_runs()
+void MOEA::queue_chance_runs(ParameterEnsemble& _dp)
 {
 	/* queue up chance-related runs using the class attributes dp and op*/
 	stringstream ss;
 	if (constraints.should_update_chance(iter))
 	{
+		dp.transform_ip(ParameterEnsemble::transStatus::NUM);
+		Parameters pars = pest_scenario.get_ctl_parameters();
+		pest_scenario.get_base_par_tran_seq().ctl2numeric_ip(pars);
+		Observations obs = pest_scenario.get_ctl_observations();
 		//if this is the first iter and no restart
-		if ((iter == 0) && (population_obs_restart_file.size() == 0))
+		
+		if (chancepoints == chancePoints::SINGLE)
 		{
-			//just use dp member nearest the mean dec var values
-			vector<double> t = dp.get_mean_stl_var_vector();
-			Eigen::VectorXd dp_mean = stlvec_2_eigenvec(t);
-			t.resize(0);
-			int idx_min;
-			double dist,dist_min = numeric_limits<double>::max();
-			for (int i = 0; i < dp.shape().first; i++)
-			{
-				dist = dp_mean.dot(dp.get_eigen_ptr()->row(i));
-				if (dist < dist_min)
-				{
-					idx_min = i;
-					dist_min = dist;
-				}
-			}
-			string min_member = dp.get_real_names()[idx_min];
-			ss.str("");
-			ss << "using member " << min_member << " as nearest-to-mean chance point with distance of " << dist_min << " from mean of decision population";
-			message(2, ss.str());
-			effective_constraint_pars.update_without_clear(dp.get_var_names(), dp.get_real_vector(min_member));
+			bool use_mean = false;
+			if ((iter == 0) && (population_obs_restart_file.size() == 0))
+				use_mean = true;
+			pair<Parameters, Observations> po_pair = get_optimal_solution(_dp, op, use_mean);
+			pest_scenario.get_base_par_tran_seq().numeric2ctl_ip(pars);
+			constraints.add_runs(iter, pars, obs, run_mgr_ptr);
 		}
-		else if (chancepoints == chancePoints::OPTIMAL)
+		else if (chancepoints == chancePoints::ALL)
 		{
-			//calculate the optimal tradeoff point from the current op
-			//dont worry about pi-based obj since they are chance-based
-			message(2, "seeking optimal trade-off point for 'optimal' chance point runs");
-			vector<double> obj_extrema;
-			Eigen::VectorXd obj_vec;
-
-			for (auto obj_name : obs_obj_names)
-			{
-				//if this is a max obj
-				if ((obj_dir_mult.find(obj_name) != obj_dir_mult.end()) &&
-					(obj_dir_mult[obj_name] == -1.0))
-					obj_extrema.push_back(op.get_var_vector(obj_name).maxCoeff());
-				else
-					obj_extrema.push_back(op.get_var_vector(obj_name).minCoeff());
-			}
-
-			Eigen::VectorXd opt_vec = stlvec_2_eigenvec(obj_extrema);
-
-			//find the member nearest the optimal tradeoff
-			int opt_idx = -1;
-			double dist, opt_dist = numeric_limits<double>::max();
-			for (int i = 0; i < op.shape().first; i++)
-			{
-				dist = opt_vec.dot(op.get_eigen_ptr()->row(i));
-				if (dist < opt_dist)
-				{
-					opt_idx = i;
-					opt_dist = dist;
-				}
-			}
-			string opt_member = op.get_real_names()[opt_idx];
-
-			effective_constraint_pars.update_without_clear(dp.get_var_names(), dp.get_real_vector(opt_member));
-			effective_constraint_obs.update_without_clear(op.get_var_names(), op.get_real_vector(opt_member));
-
-
-			ss.str("");
-			ss << "using member " << opt_member << " as optimal chance point with distance of " << opt_dist << " from optimal trade-off";
-			message(2, ss.str());
-
+			constraints.add_runs(iter, _dp, obs, run_mgr_ptr);
 		}
+
 		else
 		{
 			throw_moea_error("internal error: trying to call unsupported chancePoints type");
 		}
-		constraints.add_runs(run_mgr_ptr);
+		
 	}
 }
 
 vector<int> MOEA::run_population(ParameterEnsemble& _dp, ObservationEnsemble& _op)
 {
 	//queue up any chance related runs
-	queue_chance_runs();
+	queue_chance_runs(_dp);
 
 	message(1, "running population of size ", _dp.shape().first);
 	stringstream ss;
@@ -835,30 +980,34 @@ vector<int> MOEA::run_population(ParameterEnsemble& _dp, ObservationEnsemble& _o
 	return failed_real_indices;
 }
 
-ObservationEnsemble MOEA::get_risk_shifted_op(ObservationEnsemble& _op)
+ObservationEnsemble MOEA::get_chance_shifted_op(ObservationEnsemble& _op)
 {
-	ObservationEnsemble shifted_op(_op);
-	if (chancepoints == chancePoints::OPTIMAL)
-	{
-		message(2, "risk-shifting observation population using 'optimal' chance point");
-		constraints.presolve_chance_report(iter);
-		Observations sim, sim_shifted;
-		Eigen::VectorXd real_vec;
-		vector<string> onames = shifted_op.get_var_names();
-		for (int i = 0; i < shifted_op.shape().first; i++)
-		{
-			real_vec = shifted_op.get_real_vector(i);
-			sim.update_without_clear(onames, real_vec);
-			sim_shifted = constraints.get_chance_shifted_constraints(sim);
-			shifted_op.replace(i, sim_shifted);
-		}
-	}
-	else
-	{
-		throw_moea_error("only 'optimal' chancepoint currently supported");
-	}
+	//ObservationEnsemble shifted_op(_op);
+	//if (chancepoints == chancePoints::SINGLE)
+	//{
+	//	message(2, "risk-shifting observation population using a single, 'optimal' chance point");
+	//	//constraints.presolve_chance_report(iter,);
+	//	Observations sim, sim_shifted;
+	//	Eigen::VectorXd real_vec;
+	//	vector<string> onames = shifted_op.get_var_names();
+	//	for (int i = 0; i < shifted_op.shape().first; i++)
+	//	{
+	//		real_vec = shifted_op.get_real_vector(i);
+	//		sim.update_without_clear(onames, real_vec);
+	//		sim_shifted = constraints.get_chance_shifted_constraints(sim);
+	//		shifted_op.replace(i, sim_shifted);
+	//	}
+	//}
+	//else if (chancepoints == chancePoints::ALL)
+	//{
 
-	return shifted_op;
+	//}
+	//else
+	//{
+	//	throw_moea_error("only 'optimal' chancepoint currently supported");
+	//}
+
+	return constraints.get_chance_shifted_constraints(_op);
 }
 
 void MOEA::finalize()
@@ -934,6 +1083,10 @@ void MOEA::initialize()
 		ph.report(true);
 		ph.write(0, 1);
 		save_base_real_par_rei(pest_scenario, _pe, _oe, output_file_writer, file_manager, -1);
+		
+		message(0, "control file parameter objective function summary: ");
+		obj_func_report(_pe, _oe);
+
 		return;
 	}
 
@@ -1018,30 +1171,24 @@ void MOEA::initialize()
 
 
 	//some risk-based stuff here
-	string chance_points = ppo->get_mou_chance_points();
+	string chance_points = ppo->get_opt_chance_points();
 	if (chance_points == "ALL")
 	{
 		//evaluate the chance constraints at every individual, very costly, but most robust
-		throw_moea_error("'mou_chance_points' == 'all' not implemented");
+		//throw_moea_error("'mou_chance_points' == 'all' not implemented");
+		chancepoints = chancePoints::ALL;
 	}
-	else if (chance_points == "EXTREMA")
-	{
-		//evaluate the chance constraints at the obj extrema individuals and interpolate risk-shifts
-		//from the extrema to the rest of the population. not as costly as all, but still should 
-		//accomodate some nonlinear in the coupling
-		throw_moea_error("'mou_chance_points' == 'extrema' not implemented");
-	}
-	else if (chance_points == "OPTIMAL")
+	
+	else if (chance_points == "SINGLE")
 	{
 		//evaluate the chance constraints only at the population member nearest the optimal tradeoff.
 		//much cheaper, but assumes linear coupling
-		chancepoints = chancePoints::OPTIMAL;
-
+		chancepoints = chancePoints::SINGLE;
 	}
 	else
 	{
 		ss.str("");
-		ss << "unrecognized 'mou_chance_points' value :" << chance_points << ", should be 'all', 'extrema', or 'optimal'";
+		ss << "unrecognized 'mou_chance_points' value :" << chance_points << ", should be 'all' or 'single'";
 		throw_moea_error(ss.str());
 	}
 
@@ -1211,9 +1358,9 @@ void MOEA::initialize()
 	//throughout the process, we can update these pars and obs
 	//to control where in dec var space the stack/fosm estimates are
 	//calculated
-	effective_constraint_pars = pest_scenario.get_ctl_parameters();
-	effective_constraint_obs = pest_scenario.get_ctl_observations();
-	constraints.initialize(dv_names, &effective_constraint_pars, &effective_constraint_obs, numeric_limits<double>::max());
+	//effective_constraint_pars = pest_scenario.get_ctl_parameters();
+	//effective_constraint_obs = pest_scenario.get_ctl_observations();
+	constraints.initialize(dv_names, numeric_limits<double>::max());
 
 	int num_members = pest_scenario.get_pestpp_options().get_mou_population_size();
 	population_dv_file = ppo->get_mou_dv_population_file();
@@ -1322,15 +1469,20 @@ void MOEA::initialize()
 	op.to_csv(ss.str());
 	message(1, "saved observation population to ", ss.str());
 
+	message(0, "initial population objective function summary:");
+	previous_obj_summary = obj_func_report(dp, op);
+
 	if (constraints.get_use_chance())
 	{
-		ObservationEnsemble shifted_op = get_risk_shifted_op(op);
+		ObservationEnsemble shifted_op = get_chance_shifted_op(op);
 		ss.str("");
 		ss << file_manager.get_base_filename() << ".0." << obs_pop_file_tag << ".chance.csv";
 		op.to_csv(ss.str());
-		message(1, "saved risk_shifted observation population to ", ss.str());
+		message(1, "saved chance-shifted observation population to ", ss.str());
 
 		op = shifted_op;
+		message(0, "chance-shifted initial population objective function summary");
+		previous_obj_summary = obj_func_report(dp, op);
 	}
 
 	//save the initial dv population again in case runs failed or members were dropped as part of restart
@@ -1380,8 +1532,89 @@ void MOEA::initialize()
 	op.set_eigen(*op.get_eigen_ptr() * 2.0);
 	dp.set_real_names(temp);
 	update_archive(op, dp);*/
-
+	if (constraints.get_use_chance())
+	{
+		ofstream& f_rec = file_manager.rec_ofstream();
+		f_rec << "  initial chance constraint summary (calculated at optimal/mean decision variable point) " << endl;
+		pair<Parameters, Observations> po_pair = get_optimal_solution(dp, op, false);
+		constraints.presolve_chance_report(iter, po_pair.second);
+	}
 	message(0, "initialization complete");
+}
+
+
+pair<Parameters, Observations> MOEA::get_optimal_solution(ParameterEnsemble& _dp, ObservationEnsemble& _oe, bool use_mean)
+{
+	Parameters pars;
+	Observations obs;
+	stringstream ss;
+	if (use_mean)
+	{
+		//just use dp member nearest the mean dec var values
+
+		vector<double> t = dp.get_mean_stl_var_vector();
+		Eigen::VectorXd dp_mean = stlvec_2_eigenvec(t);
+		t.resize(0);
+		int idx_min;
+		double dist, dist_min = numeric_limits<double>::max();
+		for (int i = 0; i < dp.shape().first; i++)
+		{
+			dist = dp_mean.dot(dp.get_eigen_ptr()->row(i));
+			if (dist < dist_min)
+			{
+				idx_min = i;
+				dist_min = dist;
+			}
+		}
+		string min_member = dp.get_real_names()[idx_min];
+		ss.str("");
+		ss << "using member " << min_member << " as nearest-to-mean single point with distance of " << dist_min << " from mean of decision population";
+		message(2, ss.str());
+
+		pars.update_without_clear(dp.get_var_names(), dp.get_real_vector(min_member));
+		pest_scenario.get_base_par_tran_seq().numeric2ctl_ip(pars);
+	}
+	else
+	{
+		//calculate the optimal tradeoff point from the current op
+		//dont worry about pi-based obj since they are chance-based
+		message(2, "seeking optimal trade-off point for aingle 'optimal' chance point runs");
+		vector<double> obj_extrema;
+		Eigen::VectorXd obj_vec;
+
+		for (auto obj_name : obs_obj_names)
+		{
+			//if this is a max obj
+			if ((obj_dir_mult.find(obj_name) != obj_dir_mult.end()) &&
+				(obj_dir_mult[obj_name] == -1.0))
+				obj_extrema.push_back(op.get_var_vector(obj_name).maxCoeff());
+			else
+				obj_extrema.push_back(op.get_var_vector(obj_name).minCoeff());
+		}
+
+		Eigen::VectorXd opt_vec = stlvec_2_eigenvec(obj_extrema);
+
+		//find the member nearest the optimal tradeoff
+		int opt_idx = -1;
+		double dist, opt_dist = numeric_limits<double>::max();
+		for (int i = 0; i < op.shape().first; i++)
+		{
+			dist = opt_vec.dot(op.get_eigen_ptr()->row(i));
+			if (dist < opt_dist)
+			{
+				opt_idx = i;
+				opt_dist = dist;
+			}
+		}
+		string opt_member = op.get_real_names()[opt_idx];
+		ss.str("");
+		ss << "using member " << opt_member << " as single, 'optimal' point with distance of " << opt_dist << " from optimal trade-off";
+		message(2, ss.str());
+		pars.update_without_clear(dp.get_var_names(), dp.get_real_vector(opt_member));
+		obs.update_without_clear(op.get_var_names(), op.get_real_vector(opt_member));
+	}
+
+	return pair<Parameters, Observations>(pars, obs);
 }
 
 
@@ -1393,15 +1626,19 @@ ParameterEnsemble MOEA::generate_population()
 	num_members += (num_members - dp.shape().first);
 
 	//TODO: work out which generator to use
+
 	//TODO: add sanity check for supported algs so that we 
 	//trap issues before getting here
+
 	if (mou_alg == "DE")
 		return generate_diffevol_population(num_members, dp);
 	else if (mou_alg == "NSGA2")
 		// if using NSGA2
 		return generate_nsga2_population(num_members, dp);
+
 	else
 		throw_moea_error("unrecognized mou algorithm (looking for 'NSGA2', 'DE'): " + mou_alg);
+
 }
 
 void MOEA::iterate_to_solution()
@@ -1410,9 +1647,10 @@ void MOEA::iterate_to_solution()
 	int num_members = pest_scenario.get_pestpp_options().get_mou_population_size();
 	vector<string> keep;
 	stringstream ss;
+	map<string, map<string, double>> summary;
 	while(iter <= pest_scenario.get_control_info().noptmax)
 	{
-		message(0, "starting iteration", iter);
+		message(0, "starting iteration ", iter);
 
 		//generate offspring
 		ParameterEnsemble new_dp = generate_population();
@@ -1432,7 +1670,7 @@ void MOEA::iterate_to_solution()
 			//rank_ = 0;
 
 		//and risk-shift
-		ObservationEnsemble new_op_shifted = get_risk_shifted_op(new_op);
+		ObservationEnsemble new_op_shifted = get_chance_shifted_op(new_op);
 			
 		//TODO: save new_dp, new_op and new_op_shifted?
 
@@ -1441,7 +1679,9 @@ void MOEA::iterate_to_solution()
 		new_op.append_other_rows(op);
 
 		//sort according to pareto dominance, crowding distance, and, optionally, feasibility
+
 		message(1, "pareto dominance sorting combined parent-child populations of size ", new_dp.shape().first);
+
 		DomPair dompair = objectives.pareto_dominance_sort(new_op, new_dp);
 
 		//drop shitty members
@@ -1481,6 +1721,15 @@ void MOEA::iterate_to_solution()
 		op = new_op;
 
 		save_populations(dp, op);
+		ss.str("");
+		ss << "iteration " << iter << " objective function summary:";
+		message(0, ss.str());
+		summary = obj_func_report(dp, op);
+		ss.str("");
+		ss << "iteration " << iter << " objective function change summary:";
+		message(0, ss.str());
+		obj_func_change_report(summary);
+		previous_obj_summary = summary;
 
 		iter++;
 	}
@@ -1734,7 +1983,9 @@ ParameterEnsemble MOEA::generate_diffevol_population(int num_members, ParameterE
 ParameterEnsemble MOEA::generate_nsga2_population(int num_members, ParameterEnsemble& _dp)
 {
 	message(1, "generating NSGA2 population of size", num_members);
+
 	_dp.transform_ip(ParameterEnsemble::transStatus::NUM);
+
 	vector<int> member_count, working_count, selected, r_int_vec;
 	vector<double> rnds;
 	for (int i = 0; i < _dp.shape().first; i++)
@@ -1782,33 +2033,34 @@ ParameterEnsemble MOEA::generate_nsga2_population(int num_members, ParameterEnse
 		//just take the first two since this should change each time thru
 		p1_idx = working_count[0];
 		p2_idx = working_count[1];
-		
+
 		//generate two children thru cross over
 		children = crossover(crossover_probability, crossover_distribution_index, p1_idx, p2_idx);
 
 		//put the two children into the child population
 		new_reals.row(i_member) = children.first;
 		new_names.push_back(get_new_member_name("nsga-ii"));
-		cout << i_member << "," << p1_idx << "," << p2_idx << new_names[new_names.size() - 1] << endl;
+		//cout << i_member << "," << p1_idx << "," << p2_idx << new_names[new_names.size() - 1] << endl;
 		i_member++;
 		if (i_member >= num_members)
 			break;
 		new_reals.row(i_member) = children.second;
 		new_names.push_back(get_new_member_name("nsga-ii"));
-		cout << i_member << "," << p1_idx << "," << p2_idx << new_names[new_names.size() -1] << endl;
+		//cout << i_member << "," << p1_idx << "," << p2_idx << new_names[new_names.size() -1] << endl;
 		i_member++;
 
 	}
 		
 	ParameterEnsemble tmp_dp(&pest_scenario, &rand_gen, new_reals, new_names, _dp.get_var_names());
 	tmp_dp.set_trans_status(ParameterEnsemble::transStatus::NUM);
-	tmp_dp.to_csv("temp_cross.csv");
+	//tmp_dp.to_csv("temp_cross.csv");
 	//mutation
 	double mutation_probability = 1.0 / pest_scenario.get_n_adj_par();
 	double mutation_distribution_index = 20.0;
 	mutate(mutation_probability, mutation_distribution_index, tmp_dp);
 
-	tmp_dp.to_csv("temp_mut.csv");
+	//tmp_dp.to_csv("temp_mut.csv");
+
 
 	//TODO: return parameter ensemble for the next generation
 	return tmp_dp;
@@ -1885,7 +2137,7 @@ pair<Eigen::VectorXd, Eigen::VectorXd> MOEA::crossover(double probability, doubl
 	offs1.setZero();
 	offs2.setZero();
 
-	int n_var = pest_scenario.get_n_adj_par();
+	int n_var = dv_names.size();
 	//can't set all rnds outside of loop or all vars will be treated the same
 	rnds = uniform_draws(4, 0.0, 1.0, rand_gen);
 
@@ -2003,7 +2255,7 @@ void MOEA::mutate(double probability, double eta_m, ParameterEnsemble& temp_dp)
 	for (int i = 0; i < temp_dp.shape().first; i++)
 	{
 		Eigen::VectorXd indiv = temp_dp.get_eigen_ptr()->row(i);
-		for (int var = 0; var < pest_scenario.get_n_adj_par(); var++)
+		for (int var = 0; var < var_names.size(); var++)
 		{
 
 			vname = var_names[var];
