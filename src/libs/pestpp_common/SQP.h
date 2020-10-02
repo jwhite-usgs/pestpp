@@ -92,13 +92,15 @@ private:
 	L2PhiHandler ph;
 	ParChangeSummarizer pcs;
 	Covariance parcov, obscov;
-	double reg_factor;
 	chancePoints chancepoints;
 	string obj_func_str;
 	string obj_obs;
 	string obj_sense;
 	bool use_obj_obs;
 	map<string, double> obj_func_coef_map;
+	bool use_ensembles;
+
+	Jacobian_1to1 jco;
 
 	string base_name = "BASE"; //this is also defined in Ensemble
 
@@ -120,6 +122,8 @@ private:
 	vector<string> dv_names;
 	vector<int> subset_idxs;
 	
+	Parameters current_pars;
+	Observations current_obs;
 
 	ParameterEnsemble dv, dv_base;
 	ObservationEnsemble oe, oe_base;
@@ -136,8 +140,13 @@ private:
 	bool solve_new();
 
 	ParameterEnsemble fancy_solve_routine(double scale_val);
+	
+	Eigen::VectorXd get_obj_grad();
+
 
 	vector<int> run_ensemble(ParameterEnsemble &_pe, ObservationEnsemble &_oe, const vector<int> &real_idxs=vector<int>());
+	void run_jacobian(Parameters& pars, Observations& obs);
+
 	vector<ObservationEnsemble> run_candidate_ensembles(vector<ParameterEnsemble> &dv_candidates, vector<double> &scale_vals);
 	
 	void report_and_save();
@@ -167,6 +176,9 @@ private:
 
 	void set_subset_idx(int size);
 	
+	void prep_ensembles();
+	void prep_fd();
+
 };
 
 #endif

@@ -342,6 +342,10 @@ public:
 	void set_sqp_obs_restart_en(string _file) { sqp_obs_restart_en = _file; }
 	int get_sqp_num_reals()const { return sqp_num_reals; }
 	void set_sqp_num_reals(int _num_reals) { sqp_num_reals = _num_reals; }
+	bool get_sqp_ensemble_gradient()const { return sqp_ensemble_gradient; }
+	void set_sqp_ensemble_gradient(bool _flag) { sqp_ensemble_gradient = _flag; }
+
+
 
 	string get_mou_algorithm() const { return mou_algorithm; }
 	void set_mou_algorithm(string name) { mou_algorithm = name; }
@@ -584,6 +588,7 @@ private:
 	string sqp_dv_en;
 	string sqp_obs_restart_en;
 	int sqp_num_reals;
+	bool sqp_ensemble_gradient;
 
 	int mou_population_size;
 	string mou_algorithm; 

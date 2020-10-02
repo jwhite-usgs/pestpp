@@ -1103,6 +1103,11 @@ bool PestppOptions::assign_value_by_key_sqp(const string& key, const string& val
 		convert_ip(value, sqp_num_reals);
 		return true;
 	}
+	else if (key == "SQP_ENSEMBLE_GRADIENT")
+	{
+		sqp_ensemble_gradient = pest_utils::parse_string_arg_to_bool(value);
+		return true;
+	}
 	
 	return false;
 }
@@ -1239,6 +1244,7 @@ void PestppOptions::summary(ostream& os) const
 	os << "sqp_dv_en: " << sqp_dv_en << endl;
 	os << "sqp_obs_restart_en: " << sqp_obs_restart_en << endl;
 	os << "sqp_num_reals: " << sqp_num_reals << endl;
+	os << "sqp_ensemble_gradient: " << sqp_ensemble_gradient << endl;
 
 	os << endl << "...pestpp-mou options:" << endl;
 	os << "mou_algorithm: " << mou_algorithm << endl;
@@ -1399,6 +1405,7 @@ void PestppOptions::set_defaults()
 	set_sqp_dv_en("");
 	set_sqp_obs_restart_en("");
 	set_sqp_num_reals(50);
+	set_sqp_ensemble_gradient(true);
 
 	set_mou_algorithm("NSGA2");
 
