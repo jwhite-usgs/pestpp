@@ -102,6 +102,8 @@ private:
 
 	Jacobian_1to1 jco;
 
+	map<int, Eigen::VectorXd> iteration_obj_grad_map;
+
 	string base_name = "BASE"; //this is also defined in Ensemble
 
 	int num_threads;
@@ -140,11 +142,27 @@ private:
 	bool solve_new();
 
 	ParameterEnsemble fancy_solve_routine(double scale_val);
-	
-	Eigen::VectorXd get_obj_grad();
 
+	
+
+	Eigen::VectorXd get_obj_grad_vec();
+
+	Eigen::VectorXd lbfs_hess_update();
+
+	Eigen::VectorXd get_solve_eqp();
+
+	vector<string> get_active_set();
+
+	bool meets_wolfe(Eigen::VectorXd& obj_grad_vec);
+
+	Eigen::SparseMatrix<double> get_decvar_empirical_cov(ParameterEnsemble& _dv);
+	
+	Eigen::SparseMatrix<double> get_decvar_obj_crosscov(ParameterEnsemble& _dv, ObservationEnsemble& _oe);
+	
+	void cov_matrix_adapt(Eigen::SparseMatrix<double>& decvar_emp_cov);
 
 	vector<int> run_ensemble(ParameterEnsemble &_pe, ObservationEnsemble &_oe, const vector<int> &real_idxs=vector<int>());
+	
 	void run_jacobian(Parameters& pars, Observations& obs);
 
 	vector<ObservationEnsemble> run_candidate_ensembles(vector<ParameterEnsemble> &dv_candidates, vector<double> &scale_vals);

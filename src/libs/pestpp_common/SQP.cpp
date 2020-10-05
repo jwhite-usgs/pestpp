@@ -1389,27 +1389,66 @@ void SeqQuadProgram::update_reals_by_phi(ParameterEnsemble &_pe, ObservationEnse
 
 }
 
+
 ParameterEnsemble SeqQuadProgram::fancy_solve_routine(double scale_val)
 {
-	ParameterEnsemble dv_candidate = dv; //copy
-	//lots of fancy maths here...
-	return dv_candidate;
+	//TODO: just use lbfgs?  that seems to be the one everyone goes to 
+
+	Eigen::VectorXd grad = get_obj_grad_vec();
+	
+	if (constraints.num_constraints() > 0)
+	{
+
+	}
+
+	else
+	{
+
+	}
+
+	return ParameterEnsemble();
 }
 
-Eigen::VectorXd SeqQuadProgram::get_obj_grad()
+Eigen::VectorXd SeqQuadProgram::get_obj_grad_vec()
 {
+	stringstream ss;
 	Eigen::VectorXd grad(dv_names.size());
+	if (iter > 1)
+	{
+		performance_log->log_event("reusing ensemble-based obj grad vec from last iteration testing");
+		if (iteration_obj_grad_map.find(iter - 1) == iteration_obj_grad_map.end())
+		{
+			ss.str("");
+			ss << " previous iteration (" << iter - 1 << ") not in iteration_obj_grad_map";
+			throw_sqp_error(ss.str());
+		}
+
+		grad = iteration_obj_grad_map[iter - 1];
+		return grad;
+	}
 	if (use_ensembles)
 	{
-		//TODO: Im betting there is some trickeration here...
+			
+		performance_log->log_event("forming empirical decision variable cov matrix");
+
+		performance_log->log_event("forming empirical decision variable/obj cross cov matrix");
+
+		//TODO: add a ++ arg for this one?
+		performance_log->log_event("covariance matrix adaptation");
+
+		performance_log->log_event("psuedo inverse of empirical dec var cov matrix");
+
+		performance_log->log_event("forming ensemble-based obj grad vector");
 	}
+
+	//finite differences
 	else
 	{
 		vector<string> names = jco.obs_and_reg_list();
 		int idx = find(names.begin(), names.end(), obj_obs) - names.begin();
-		grad = jco.get_matrix_ptr()->row(idx);
+		grad = jco.get_matrix_ptr()->row(idx);	
 	}
-	return Eigen::VectorXd();
+	return grad;
 }
 
 
@@ -1750,6 +1789,7 @@ bool SeqQuadProgram::solve_new()
 	//report_and_save();
 	return true;
 }
+
 
 
 void SeqQuadProgram::report_and_save()
