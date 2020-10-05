@@ -1426,29 +1426,84 @@ Eigen::VectorXd SeqQuadProgram::get_obj_grad_vec()
 		grad = iteration_obj_grad_map[iter - 1];
 		return grad;
 	}
+	Covariance dv_cov;
+	Mat dv_obs_ccov;
 	if (use_ensembles)
 	{
-			
-		performance_log->log_event("forming empirical decision variable cov matrix");
 
-		performance_log->log_event("forming empirical decision variable/obj cross cov matrix");
-
-		//TODO: add a ++ arg for this one?
-		performance_log->log_event("covariance matrix adaptation");
-
-		performance_log->log_event("psuedo inverse of empirical dec var cov matrix");
-
-		performance_log->log_event("forming ensemble-based obj grad vector");
+		
+		
 	}
+
 
 	//finite differences
 	else
 	{
 		vector<string> names = jco.obs_and_reg_list();
 		int idx = find(names.begin(), names.end(), obj_obs) - names.begin();
-		grad = jco.get_matrix_ptr()->row(idx);	
+		grad = jco.get_matrix_ptr()->row(idx);
 	}
 	return grad;
+
+}
+
+void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsemble& _oe)
+{
+	stringstream ss;
+	if (_dv.shape().first != _oe.shape().first)
+	{
+		ss.str("");
+		ss << "fill_empirical_jco: _dv has different number of realizations than _oe: " << _dv.shape().first << " vs " << _oe.shape().first;
+		throw_sqp_error(ss.str());
+	}
+	//TODO: do we need to use the ensemble empirical cov matrix?  what if the user supplied a parcov?
+	//TODO: think about a low-rank par cov approx similar to ies cause this thing will be too large
+	//to deal with for very high-dimen problems
+	performance_log->log_event("forming empirical decision variable cov matrix");
+	Covariance dv_cov_inv = get_decvar_empirical_cov(dv);
+	
+	performance_log->log_event("covariance matrix adaptation");	
+
+	performance_log->log_event("pseudo inverse of empirical dec var cov matrix");
+	double eigthresh = pest_scenario.get_svd_info().eigthresh;
+	int maxsing = pest_scenario.get_svd_info().maxsing;
+	dv_cov_inv.pseudo_inv_ip(eigthresh, maxsing);
+	
+	//get the empirical variance (low-rank covariance) for the constraints and the obj func
+	Covariance oe_cov_inv = _oe.get_diagonal_cov_matrix();
+	oe_cov_inv.pseudo_inv_ip(eigthresh, maxsing);
+	performance_log->log_event("forming ensemble-based obj grad vector");
+	
+	double scale = 1.0 / (double(_dv.shape().first - 1));
+	
+	Eigen::MatrixXd dv_anom = _dv.get_eigen_anomalies();
+	dv_anom = *dv_cov_inv.e_ptr() * dv_anom;
+	dv_anom *= scale;
+
+	Eigen::MatrixXd oe_anom = _oe.get_eigen_anomalies();
+	oe_anom = *oe_cov_inv.e_ptr() * oe_anom;
+	oe_anom *= scale;
+
+	//get the pseudo inv of the scaled dv anomaly matrix
+	SVD_REDSVD rsvd(maxsing, eigthresh);
+	Eigen::MatrixXd U, Vt, S;
+	rsvd.solve_ip(dv_anom, S, U, Vt, eigthresh,maxsing);
+	S.array() = 1.0 / S.array();
+	dv_anom = Vt.transpose() * S * U.transpose();
+
+	Eigen::MatrixXd prod = oe_anom * dv_anom;
+
+	//set this matrix as the jco sqp attribute
+	Mat(_oe.get_var_names(), _dv.get_var_names(), prod.sparseView());
+}
+
+Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)
+{
+	//pair<Covariance, Covariance> cov_pair = _dv.get_empirical_cov_matrices(&file_manager);
+	//TODO: should we use the shrunk empirical cov?  maybe since it is a better approx than the moore-penrose pseudo inverse
+	//TODO: or use the low rank approx
+	return _dv.get_diagonal_cov_matrix();
+	//return cov_pair.first;
 }
 
 
@@ -2322,6 +2377,9 @@ vector<int> SeqQuadProgram::run_ensemble(ParameterEnsemble &_pe, ObservationEnse
 	}
 
 	constraints.process_runs(run_mgr_ptr, iter);
+
+	performance_log->log_event("forming empirical decision variable/obj cross cov matrix");
+	fill_empirical_jco(_pe, _oe);
 
 	return failed_real_indices;
 }

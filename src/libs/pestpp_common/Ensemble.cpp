@@ -533,6 +533,7 @@ Covariance Ensemble::get_diagonal_cov_matrix()
 	double var;
 	vector<Eigen::Triplet<double>> triplets;
 	double num_reals = double(reals.rows());
+	stringstream ss;
 	for (int j = 0; j < var_names.size(); j++)
 	{
 		//calc variance for this var_name
@@ -540,9 +541,11 @@ Covariance Ensemble::get_diagonal_cov_matrix()
 		//if (var == 0.0)
 		if (var <=1.0e-30)
 		{
-			stringstream ss;
-			ss << "invalid variance for ensemble variable: " << var_names[j] << ": " << var;
-			throw_ensemble_error(ss.str());
+			ss.str("");
+			ss << "invalid variance for ensemble variable: " << var_names[j] << ": " << var << " using 1.0e-30" << endl;
+			//throw_ensemble_error(ss.str());
+			cout << ss.str();
+			var = 1.0e+30;
 
 		}
 		triplets.push_back(Eigen::Triplet<double>(j, j, var));

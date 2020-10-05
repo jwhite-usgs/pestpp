@@ -143,8 +143,6 @@ private:
 
 	ParameterEnsemble fancy_solve_routine(double scale_val);
 
-	
-
 	Eigen::VectorXd get_obj_grad_vec();
 
 	Eigen::VectorXd lbfs_hess_update();
@@ -155,9 +153,9 @@ private:
 
 	bool meets_wolfe(Eigen::VectorXd& obj_grad_vec);
 
-	Eigen::SparseMatrix<double> get_decvar_empirical_cov(ParameterEnsemble& _dv);
+	Covariance get_decvar_empirical_cov(ParameterEnsemble& _dv);
 	
-	Eigen::SparseMatrix<double> get_decvar_obj_crosscov(ParameterEnsemble& _dv, ObservationEnsemble& _oe);
+	void fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsemble& _oe);
 	
 	void cov_matrix_adapt(Eigen::SparseMatrix<double>& decvar_emp_cov);
 

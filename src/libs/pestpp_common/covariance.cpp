@@ -273,6 +273,19 @@ void Mat::inv_ip(bool echo)
 	return;
 }
 
+void Mat::pseudo_inv_ip(double eigthresh, int maxsing)
+{
+	SVD_REDSVD rsvd(maxsing, eigthresh);
+	Eigen::SparseMatrix<double> U, Vt;
+	Eigen::VectorXd s, s_trunc;
+	rsvd.solve_ip(matrix, s, U, Vt, s_trunc);
+	s.array() = 1.0 / s.array();
+	matrix = Vt.transpose() * s.asDiagonal() * U.transpose();
+	cout << matrix.rows() << ", " << matrix.cols() << endl;
+	cout << endl;
+
+}
+
 void Mat::inv_ip(PerformanceLog& pfm)
 {
 	if (nrow() != ncol()) throw runtime_error("Mat::inv() error: only symmetric positive definite matrices can be inverted with Mat::inv()");
