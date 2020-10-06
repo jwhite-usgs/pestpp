@@ -82,7 +82,7 @@ def basic_sqp_test():
     assert df.shape == (pst.pestpp_options["sqp_num_reals"],pst.nobs),str(df.shape)
 
 
-def sqp_ensemble_grad_test():
+def sqp_ensemble_jco_test():
     model_d = "mf6_freyberg"
     local=True
     if "linux" in platform.platform().lower() and "10par" in model_d:
@@ -91,13 +91,15 @@ def sqp_ensemble_grad_test():
         local=False
     
     t_d = os.path.join(model_d,"template")
-    m_d = os.path.join(model_d,"master_sqp_grad")
+    m_d = os.path.join(model_d,"master_sqp_jco")
     if os.path.exists(m_d):
         shutil.rmtree(m_d)
     pst = pyemu.Pst(os.path.join(t_d,"freyberg6_run_opt.pst"))
-    pst.control_data.noptmax = 0
+    
+    par = pst.parameter_data
+    par.loc[par.pargp=="welflux","parval1"] = (par.loc[par.pargp=="welflux","parubnd"] + par.loc[par.pargp=="welflux","parlbnd"]) / 2.0
 
-    pst.pestpp_options["sqp_num_reals"] = 10
+    pst.pestpp_options["sqp_num_reals"] = 3
     pst.pestpp_options["opt_risk"] = 0.5
     pst.pestpp_options["sqp_ensemble_gradient"] = True
 
@@ -117,6 +119,6 @@ def start_workers():
 if __name__ == "__main__":
     
     shutil.copy2(os.path.join("..","exe","windows","x64","Debug","pestpp-sqp.exe"),os.path.join("..","bin","pestpp-sqp.exe"))
-    basic_sqp_test()
-    #sqp_ensemble_grad_test()
+    #basic_sqp_test()
+    sqp_ensemble_jco_test()
     #start_workers()

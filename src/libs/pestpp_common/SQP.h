@@ -93,11 +93,11 @@ private:
 	ParChangeSummarizer pcs;
 	Covariance parcov, obscov;
 	chancePoints chancepoints;
-	string obj_func_str;
-	string obj_obs;
-	string obj_sense;
-	bool use_obj_obs;
-	map<string, double> obj_func_coef_map;
+	//string obj_func_str;
+	//string obj_obs;
+	//string obj_sense;
+	//bool use_obj_obs;
+	//map<string, double> obj_func_coef_map;
 	bool use_ensembles;
 
 	Jacobian_1to1 jco;
@@ -136,6 +136,8 @@ private:
 
 	Constraints constraints;
 
+	OptObjFunc optobjfunc;
+
 	bool oe_drawn, dv_drawn;
 
 	//bool solve_old();
@@ -172,7 +174,7 @@ private:
 	bool initialize_restart();
 	void initialize_parcov();
 	void initialize_obscov();
-	void initialize_objfunc();
+	//void initialize_objfunc();
 	void drop_bad_phi(ParameterEnsemble &_pe, ObservationEnsemble &_oe, bool is_subset=false);
 	
 	void queue_chance_runs();

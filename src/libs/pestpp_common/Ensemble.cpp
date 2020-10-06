@@ -524,7 +524,7 @@ pair<Covariance,Covariance> Ensemble::get_empirical_cov_matrices(FileManager* fi
 	return pair<Covariance,Covariance> (rcov,rcov_shrunk);
 }
 
-Covariance Ensemble::get_diagonal_cov_matrix()
+Covariance Ensemble::get_diagonal_cov_matrix(bool forgive, bool std_instead)
 {
 	//build an empirical diagonal covariance matrix from the realizations
 
@@ -537,17 +537,26 @@ Covariance Ensemble::get_diagonal_cov_matrix()
 	for (int j = 0; j < var_names.size(); j++)
 	{
 		//calc variance for this var_name
-		var = (reals.col(j).cwiseProduct(reals.col(j))).sum() / num_reals;
+		var = (meandiff.col(j).cwiseProduct(meandiff.col(j))).sum() / num_reals;
 		//if (var == 0.0)
 		if (var <=1.0e-30)
 		{
 			ss.str("");
 			ss << "invalid variance for ensemble variable: " << var_names[j] << ": " << var << " using 1.0e-30" << endl;
-			//throw_ensemble_error(ss.str());
-			cout << ss.str();
-			var = 1.0e+30;
+			
+			if (forgive)
+			{
+				cout << ss.str();
+				var = 1.0e+30;
+			}
+			else
+			{
+				throw_ensemble_error(ss.str());
+			}
 
 		}
+		if (std_instead)
+			var = sqrt(var);
 		triplets.push_back(Eigen::Triplet<double>(j, j, var));
 	}
 
@@ -2556,6 +2565,42 @@ void ParameterEnsemble::to_csv_by_vars(ofstream &csv)
 	}
 }
 
+ParameterEnsemble ParameterEnsemble::get_subset_of_vars(vector<string>& _var_names)
+{
+	set<string> s_var_names(var_names.begin(), var_names.end());
+	vector<string> missing;
+	if (_var_names.size() == 0)
+		throw_ensemble_error("get_subset_of_vars(): request var names is empty");
+
+	for (auto var_name : _var_names)
+	{
+		if (s_var_names.find(var_name) == s_var_names.end())
+			missing.push_back(var_name);
+	}
+	if (missing.size() > 0)
+	{
+		throw_ensemble_error("get_subset_of_vars(): the following requested var_names not found:", missing);
+	}
+
+	update_var_map();
+	map<string, int> _var_map = get_var_map();
+
+	Eigen::MatrixXd _reals(real_names.size(), _var_names.size());
+	_reals.setZero();
+	int i = 0;
+	for (auto var_name : _var_names)
+	{
+		_reals.col(i) = reals.col(var_map[var_name]);
+		i++;
+	}
+
+	ParameterEnsemble pe = ParameterEnsemble(pest_scenario_ptr, rand_gen_ptr, _reals, real_names, _var_names);
+	pe.set_trans_status(tstat);
+
+	return pe;
+}
+
+
 void ParameterEnsemble::to_csv_by_reals(ofstream &csv)
 {
 	vector<string> names = pest_scenario_ptr->get_ctl_ordered_par_names();
@@ -2645,10 +2690,10 @@ void ParameterEnsemble::transform_ip(transStatus to_tstat)
 		throw_ensemble_error("ParameterEnsemble::transform_ip() only CTL to NUM implemented");
 
 }
-Covariance ParameterEnsemble::get_diagonal_cov_matrix()
+Covariance ParameterEnsemble::get_diagonal_cov_matrix(bool forgive, bool std_instead)
 {
 	transform_ip(transStatus::NUM);
-	return Ensemble::get_diagonal_cov_matrix();
+	return Ensemble::get_diagonal_cov_matrix(forgive, std_instead);
 }
 
 ObservationEnsemble::ObservationEnsemble(Pest *_pest_scenario_ptr, std::mt19937* _rand_gen_ptr): Ensemble(_pest_scenario_ptr, _rand_gen_ptr)
@@ -2665,6 +2710,37 @@ ObservationEnsemble::ObservationEnsemble(Pest *_pest_scenario_ptr, std::mt19937*
 	reals = _reals;
 	var_names = _var_names;
 	real_names = _real_names;
+}
+
+ObservationEnsemble ObservationEnsemble::get_subset_of_vars(vector<string>& _var_names)
+{
+	set<string> s_var_names(var_names.begin(), var_names.end());
+	vector<string> missing;
+	if (_var_names.size() == 0)
+		throw_ensemble_error("get_subset_of_vars(): request var names is empty");
+
+	for (auto var_name : _var_names)
+	{
+		if (s_var_names.find(var_name) == s_var_names.end())
+			missing.push_back(var_name);
+	}
+	if (missing.size() > 0)
+	{
+		throw_ensemble_error("get_subset_of_vars(): the following requested var_names not found:", missing);
+	}
+
+	update_var_map();
+	map<string, int> _var_map = get_var_map();
+
+	Eigen::MatrixXd _reals(real_names.size(), _var_names.size());
+	_reals.setZero();
+	int i = 0;
+	for (auto var_name : _var_names)
+	{
+		_reals.col(i) = reals.col(var_map[var_name]);
+		i++;
+	}
+	return ObservationEnsemble(pest_scenario_ptr, rand_gen_ptr, _reals, real_names, _var_names);
 }
 
 

@@ -23,7 +23,7 @@ SeqQuadProgram::SeqQuadProgram(Pest& _pest_scenario, FileManager& _file_manager,
 	RunManagerAbstract* _run_mgr_ptr) : pest_scenario(_pest_scenario), file_manager(_file_manager),
 	output_file_writer(_output_file_writer), performance_log(_performance_log),
 	run_mgr_ptr(_run_mgr_ptr), constraints(_pest_scenario, &_file_manager, _output_file_writer, *_performance_log),
-	jco(_file_manager, _output_file_writer)
+	jco(_file_manager, _output_file_writer), optobjfunc(_pest_scenario,&_file_manager,*_performance_log)
 {
 	rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
 	subset_rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
@@ -374,81 +374,83 @@ void SeqQuadProgram::sanity_checks()
 	//cout << endl << endl;
 }
 
-void SeqQuadProgram::initialize_objfunc()
-{
-	//initialize the objective function
-	obj_func_str = pest_scenario.get_pestpp_options().get_opt_obj_func();
-	obj_sense = (pest_scenario.get_pestpp_options().get_opt_direction() == 1) ? "minimize" : "maximize";
-
-	ofstream& f_rec = file_manager.rec_ofstream();
-
-
-	//check if the obj_str is an observation
-	use_obj_obs = false;
-	if (pest_scenario.get_ctl_observations().find(obj_func_str) != pest_scenario.get_ctl_observations().end())
-	{
-		use_obj_obs = true;
-		obj_obs = obj_func_str;
-		//check
-		vector<string> cnames = constraints.get_obs_constraint_names();
-		set<string> names(cnames.begin(), cnames.end());
-		if (names.find(obj_obs) != names.end())
-		{
-			throw_sqp_error("objective function obs is a constraint, #sad");
-		}
-		names.clear();
-		cnames = constraints.get_nz_obs_names();
-		names.insert(cnames.begin(), cnames.end());
-		if (names.find(obj_obs) != names.end())
-		{
-			throw_sqp_error("objective function obs has non-zero weight and chance constraints are active");
-		}
-	}
-
-	else
-	{
-		if (obj_func_str.size() == 0)
-		{
-			f_rec << " warning: no ++opt_objective_function-->forming a generic objective function (1.0 coef for each decision var)" << endl;
-			for (auto& name : dv_names)
-				obj_func_coef_map[name] = 1.0;
-		}
-
-		//or if it is a prior info equation
-		else if (pest_scenario.get_prior_info().find(obj_func_str) != pest_scenario.get_prior_info().end())
-		{
-			obj_func_coef_map = pest_scenario.get_prior_info().get_pi_rec_ptr(obj_func_str).get_atom_factors();
-		}
-		else
-		{
-			//check if this obj_str is a filename
-			ifstream if_obj(obj_func_str);
-			if (!if_obj.good())
-				throw_sqp_error("unrecognized ++opt_objective_function arg (tried file name, obs name, prior info name): " + obj_func_str);
-			else
-				obj_func_coef_map = pest_utils::read_twocol_ascii_to_map(obj_func_str);
-		}
-
-
-		//check that all obj_coefs are decsision vars
-		vector<string> missing_vars;
-		set<string> s_dv_names(dv_names.begin(), dv_names.end());
-		for (auto& coef : obj_func_coef_map)
-			if (s_dv_names.find(coef.first) == s_dv_names.end())
-				missing_vars.push_back(coef.first);
-		if (missing_vars.size() > 0)
-		{
-			stringstream ss;
-			ss << "the following objective function components are not decision variables: ";
-			for (auto m : missing_vars)
-			{
-				ss << m << ",";
-				
-			}
-			throw_sqp_error(ss.str());
-		}
-	}
-}
+//void SeqQuadProgram::initialize_objfunc()
+//{
+//	
+//
+//	//initialize the objective function
+//	obj_func_str = pest_scenario.get_pestpp_options().get_opt_obj_func();
+//	obj_sense = (pest_scenario.get_pestpp_options().get_opt_direction() == 1) ? "minimize" : "maximize";
+//
+//	ofstream& f_rec = file_manager.rec_ofstream();
+//
+//
+//	//check if the obj_str is an observation
+//	use_obj_obs = false;
+//	if (pest_scenario.get_ctl_observations().find(obj_func_str) != pest_scenario.get_ctl_observations().end())
+//	{
+//		use_obj_obs = true;
+//		obj_obs = obj_func_str;
+//		//check
+//		vector<string> cnames = constraints.get_obs_constraint_names();
+//		set<string> names(cnames.begin(), cnames.end());
+//		if (names.find(obj_obs) != names.end())
+//		{
+//			throw_sqp_error("objective function obs is a constraint, #sad");
+//		}
+//		names.clear();
+//		cnames = constraints.get_nz_obs_names();
+//		names.insert(cnames.begin(), cnames.end());
+//		if (names.find(obj_obs) != names.end())
+//		{
+//			throw_sqp_error("objective function obs has non-zero weight and chance constraints are active");
+//		}
+//	}
+//
+//	else
+//	{
+//		if (obj_func_str.size() == 0)
+//		{
+//			f_rec << " warning: no ++opt_objective_function-->forming a generic objective function (1.0 coef for each decision var)" << endl;
+//			for (auto& name : dv_names)
+//				obj_func_coef_map[name] = 1.0;
+//		}
+//
+//		//or if it is a prior info equation
+//		else if (pest_scenario.get_prior_info().find(obj_func_str) != pest_scenario.get_prior_info().end())
+//		{
+//			obj_func_coef_map = pest_scenario.get_prior_info().get_pi_rec_ptr(obj_func_str).get_atom_factors();
+//		}
+//		else
+//		{
+//			//check if this obj_str is a filename
+//			ifstream if_obj(obj_func_str);
+//			if (!if_obj.good())
+//				throw_sqp_error("unrecognized ++opt_objective_function arg (tried file name, obs name, prior info name): " + obj_func_str);
+//			else
+//				obj_func_coef_map = pest_utils::read_twocol_ascii_to_map(obj_func_str);
+//		}
+//
+//
+//		//check that all obj_coefs are decsision vars
+//		vector<string> missing_vars;
+//		set<string> s_dv_names(dv_names.begin(), dv_names.end());
+//		for (auto& coef : obj_func_coef_map)
+//			if (s_dv_names.find(coef.first) == s_dv_names.end())
+//				missing_vars.push_back(coef.first);
+//		if (missing_vars.size() > 0)
+//		{
+//			stringstream ss;
+//			ss << "the following objective function components are not decision variables: ";
+//			for (auto m : missing_vars)
+//			{
+//				ss << m << ",";
+//				
+//			}
+//			throw_sqp_error(ss.str());
+//		}
+//	}
+//}
 
 
 bool SeqQuadProgram::initialize_restart()
@@ -738,6 +740,9 @@ void SeqQuadProgram::initialize()
 
 	constraints.initialize(dv_names, numeric_limits<double>::max());
 	constraints.initial_report();
+
+	optobjfunc.initialize(constraints.get_obs_constraint_names(), dv_names);
+
 	//some risk-based stuff here
 	string chance_points = ppo->get_opt_chance_points();
 	if (chance_points == "ALL")
@@ -1435,12 +1440,11 @@ Eigen::VectorXd SeqQuadProgram::get_obj_grad_vec()
 		
 	}
 
-
 	//finite differences
 	else
 	{
 		vector<string> names = jco.obs_and_reg_list();
-		int idx = find(names.begin(), names.end(), obj_obs) - names.begin();
+		int idx = find(names.begin(), names.end(), optobjfunc.get_obj_name()) - names.begin();
 		grad = jco.get_matrix_ptr()->row(idx);
 	}
 	return grad;
@@ -1456,11 +1460,21 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 		ss << "fill_empirical_jco: _dv has different number of realizations than _oe: " << _dv.shape().first << " vs " << _oe.shape().first;
 		throw_sqp_error(ss.str());
 	}
+	_dv.transform_ip(ParameterEnsemble::transStatus::NUM);
+
+	//TODO: think about prior info obj and constraints...
+	vector<string> cnames = constraints.get_obs_constraint_names();
+	if (optobjfunc.get_objtype() == OptObjFunc::objType::OBS)
+		cnames.push_back(optobjfunc.get_obj_name());
+	ObservationEnsemble active_oe = _oe.get_subset_of_vars(cnames);
+
+	ParameterEnsemble active_dv = _dv.get_subset_of_vars(dv_names);
+
 	//TODO: do we need to use the ensemble empirical cov matrix?  what if the user supplied a parcov?
 	//TODO: think about a low-rank par cov approx similar to ies cause this thing will be too large
 	//to deal with for very high-dimen problems
 	performance_log->log_event("forming empirical decision variable cov matrix");
-	Covariance dv_cov_inv = get_decvar_empirical_cov(dv);
+	Covariance dv_cov_inv = get_decvar_empirical_cov(active_dv);
 	
 	performance_log->log_event("covariance matrix adaptation");	
 
@@ -1469,27 +1483,28 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 	int maxsing = pest_scenario.get_svd_info().maxsing;
 	dv_cov_inv.pseudo_inv_ip(eigthresh, maxsing);
 	
-	//get the empirical variance (low-rank covariance) for the constraints and the obj func
-	Covariance oe_cov_inv = _oe.get_diagonal_cov_matrix();
-	oe_cov_inv.pseudo_inv_ip(eigthresh, maxsing);
+	//get the empirical sqrt variance (low-rank covariance) for the constraints and the obj func
+	Covariance oe_cov = active_oe.get_diagonal_cov_matrix(true, true);
+
 	performance_log->log_event("forming ensemble-based obj grad vector");
 	
 	double scale = 1.0 / (double(_dv.shape().first - 1));
 	
-	Eigen::MatrixXd dv_anom = _dv.get_eigen_anomalies();
-	dv_anom = *dv_cov_inv.e_ptr() * dv_anom;
+	Eigen::MatrixXd dv_anom = active_dv.get_eigen_anomalies();
+	dv_anom = *dv_cov_inv.e_ptr() * dv_anom.transpose();
 	dv_anom *= scale;
 
-	Eigen::MatrixXd oe_anom = _oe.get_eigen_anomalies();
-	oe_anom = *oe_cov_inv.e_ptr() * oe_anom;
+	Eigen::MatrixXd oe_anom = active_oe.get_eigen_anomalies();
+	oe_anom = *oe_cov.e_ptr() * oe_anom.transpose();
 	oe_anom *= scale;
 
 	//get the pseudo inv of the scaled dv anomaly matrix
 	SVD_REDSVD rsvd(maxsing, eigthresh);
-	Eigen::MatrixXd U, Vt, S;
-	rsvd.solve_ip(dv_anom, S, U, Vt, eigthresh,maxsing);
+	/*Eigen::MatrixXd U, V, S;
+	rsvd.solve_ip(dv_anom, S, U, V, eigthresh,maxsing);
 	S.array() = 1.0 / S.array();
-	dv_anom = Vt.transpose() * S * U.transpose();
+	dv_anom = V * S * U.transpose();*/
+	dv_anom = rsvd.get_pseudo_inv(dv_anom, eigthresh, maxsing);
 
 	Eigen::MatrixXd prod = oe_anom * dv_anom;
 
@@ -1502,7 +1517,7 @@ Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)
 	//pair<Covariance, Covariance> cov_pair = _dv.get_empirical_cov_matrices(&file_manager);
 	//TODO: should we use the shrunk empirical cov?  maybe since it is a better approx than the moore-penrose pseudo inverse
 	//TODO: or use the low rank approx
-	return _dv.get_diagonal_cov_matrix();
+	return _dv.get_diagonal_cov_matrix(false, false);
 	//return cov_pair.first;
 }
 
