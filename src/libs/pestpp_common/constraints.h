@@ -23,7 +23,7 @@ using namespace std;
 class OptObjFunc
 {
 public:
-	enum objType { OBS, PI, FILE, UNKNOWN };
+	enum objType { OBS, PI, FILE, GENERIC, UNKNOWN };
 	OptObjFunc(Pest& _pest_scenario, FileManager* _file_mgr_ptr, PerformanceLog& _pfm);
 	void initialize(vector<string> _constraint_names, vector<string> _dv_names);
 	double get_obj_func_value(Parameters& pars, Observations& obs);

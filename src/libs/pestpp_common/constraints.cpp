@@ -160,6 +160,7 @@ void OptObjFunc::initialize(vector<string> _obs_constraint_names, vector<string>
 	obs_constraint_names = _obs_constraint_names;
 
 	//check if the obj_str is an observation
+	objtype = objType::UNKNOWN;
 	if (pest_scenario.get_ctl_observations().find(obj_func_str) != pest_scenario.get_ctl_observations().end())
 	{
 		obj_name = obj_func_str;
@@ -187,6 +188,7 @@ void OptObjFunc::initialize(vector<string> _obs_constraint_names, vector<string>
 			f_rec << " warning: no ++opt_objective_function-->forming a generic objective function (1.0 coef for each decision var)" << endl;
 			for (auto& name : dv_names)
 				obj_func_coef_map[name] = 1.0;
+			objtype = objType::GENERIC;
 		}
 
 		//or if it is a prior info equation
