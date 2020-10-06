@@ -30,7 +30,7 @@ OptObjFunc::OptObjFunc(Pest& _pest_scenario, FileManager* _file_mgr_ptr, Perform
 
 void OptObjFunc::update_coef_map_from_jacobian(Jacobian& jco)
 {
-	if ((!objtype == objType::OBS) && (!objtype==objType::PI))
+	if (!objtype == objType::OBS)
 		return;
 
 	obj_func_coef_map.clear();
@@ -84,10 +84,14 @@ void OptObjFunc::report()
 	ofstream& f_rec = file_mgr_ptr->rec_ofstream();
 	map<string, double>::iterator end = obj_func_coef_map.end();
 	vector<string> missing;
-	if (objtype ==objType::OBS)
-		f_rec << "objective function coefficients defined by observation: " << pest_scenario.get_pestpp_options().get_opt_obj_func() << endl;
+	if (objtype == objType::OBS)
+		f_rec << "objective function coefficients defined by observation: " << obj_name << endl;
 	else
 	{
+		if (objtype == objType::PI)
+			f_rec << "objective function coefficients defined by prior information equation: " << obj_name << endl;
+		else if (objtype == objType::FILE)
+			f_rec << "objective function coefficients defined by file: " << pest_scenario.get_pestpp_options().get_opt_obj_func() << endl;
 		f_rec << "  ---  objective function coefficients  ---  " << endl;
 		vector<string> missing;
 		ofstream& f_rec = file_mgr_ptr->rec_ofstream();

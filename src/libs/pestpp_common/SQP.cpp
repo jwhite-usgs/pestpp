@@ -1460,7 +1460,7 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 		ss << "fill_empirical_jco: _dv has different number of realizations than _oe: " << _dv.shape().first << " vs " << _oe.shape().first;
 		throw_sqp_error(ss.str());
 	}
-	_dv.transform_ip(ParameterEnsemble::transStatus::NUM);
+	
 
 	//TODO: think about prior info obj and constraints...
 	vector<string> cnames = constraints.get_obs_constraint_names();
@@ -1468,7 +1468,18 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 		cnames.push_back(optobjfunc.get_obj_name());
 	ObservationEnsemble active_oe = _oe.get_subset_of_vars(cnames);
 
+	//do this after the prior info append to make sure we are in num status
+	_dv.transform_ip(ParameterEnsemble::transStatus::NUM);
 	ParameterEnsemble active_dv = _dv.get_subset_of_vars(dv_names);
+	
+	vector<string> pi_names = constraints.get_pi_constraint_names();
+	if (pi_names.size() > 0)
+	{
+		ObservationEnsemble pi_oe(&pest_scenario, &rand_gen);
+
+		pi_oe.from_prior_info(_dv, pi_names);
+		active_oe.append_other_cols(pi_oe);
+	}
 
 	//TODO: do we need to use the ensemble empirical cov matrix?  what if the user supplied a parcov?
 	//TODO: think about a low-rank par cov approx similar to ies cause this thing will be too large
@@ -1509,8 +1520,8 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 	Eigen::MatrixXd prod = oe_anom * dv_anom;
 
 	//set this matrix as the jco sqp attribute
-	Mat(_oe.get_var_names(), _dv.get_var_names(), prod.sparseView());
-
+	Mat(active_oe.get_var_names(), active_dv.get_var_names(), prod.sparseView());
+	
 }
 
 Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)
@@ -1614,7 +1625,11 @@ bool SeqQuadProgram::solve_new()
 	int best_idx = -1;
 	double best_mean = 1.0e+30, best_std = 1.0e+30;
 	double mean, std;
+	
+	//temp just to keep from trying to run trash when testing
+	return true;
 
+	
 	message(0, "running candidate decision variable ensembles");
 	vector<ObservationEnsemble> oe_lams = run_candidate_ensembles(dv_candidates, scale_vals);
 

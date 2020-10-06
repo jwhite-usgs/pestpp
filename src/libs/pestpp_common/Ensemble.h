@@ -66,6 +66,7 @@ public:
 
 	void append_other_rows(Ensemble &other);
 	void append_other_rows(const vector<string>& _real_names, Eigen::MatrixXd& _reals);
+	void append_other_cols(Ensemble& other);
 	void append(string real_name, const Transformable &trans);
 	void replace(int idx, const Transformable &trans, string real_name="");
 
@@ -195,7 +196,7 @@ public:
 	void draw(int num_reals, Covariance &cov, PerformanceLog *plog, int level, ofstream& frec);
 	void initialize_without_noise(int num_reals);
 	//ObservationEnsemble get_mean_diff();
-	void append_prior_info_ip(ParameterEnsemble& pe, vector<string> pi_names = vector<string>());
+	void from_prior_info(ParameterEnsemble& pe, vector<string> pi_names = vector<string>());
 };
 
 class DrawThread
