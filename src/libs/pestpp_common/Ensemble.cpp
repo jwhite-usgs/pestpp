@@ -2782,7 +2782,8 @@ void ObservationEnsemble::append_prior_info_ip(ParameterEnsemble& pe, vector<str
 			reals(i, j + offset) = sim_res.first;
 		}
 	}
-	var_names.emplace_back(pi_names.begin(), pi_names.end());
+	for (auto pi_name : pi_names)
+		var_names.push_back(pi_name);
 }	
 
 
