@@ -1510,6 +1510,7 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 
 	//set this matrix as the jco sqp attribute
 	Mat(_oe.get_var_names(), _dv.get_var_names(), prod.sparseView());
+
 }
 
 Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)

@@ -195,6 +195,7 @@ public:
 	void draw(int num_reals, Covariance &cov, PerformanceLog *plog, int level, ofstream& frec);
 	void initialize_without_noise(int num_reals);
 	//ObservationEnsemble get_mean_diff();
+	void append_prior_info_ip(ParameterEnsemble& pe, vector<string> pi_names = vector<string>());
 };
 
 class DrawThread

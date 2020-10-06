@@ -2743,6 +2743,48 @@ ObservationEnsemble ObservationEnsemble::get_subset_of_vars(vector<string>& _var
 	return ObservationEnsemble(pest_scenario_ptr, rand_gen_ptr, _reals, real_names, _var_names);
 }
 
+void ObservationEnsemble::append_prior_info_ip(ParameterEnsemble& pe, vector<string> pi_names)
+{
+
+	if (pe.shape().first != reals.rows())
+	{
+		throw_ensemble_error("append_prior_info(): pe has different number of rows than oe");
+	}
+
+	PriorInformation pi = pest_scenario_ptr->get_prior_info();
+	vector<string> missing;
+	for (auto pi_name : pi_names)
+		if (pi.find(pi_name) == pi.end())
+			missing.push_back(pi_name);
+
+	if (missing.size() > 0)
+		throw_ensemble_error("append_prior_info(): the following prior info names not found:", missing);
+	if (pi_names.size() == 0)
+	{
+		pi_names = pest_scenario_ptr->get_ctl_ordered_pi_names();
+	}
+	if (pi_names.size() == 0)
+		throw_ensemble_error("append_prior_info(): no pi_names found");
+	int offset = reals.cols();
+	reals.conservativeResize(reals.rows(), reals.cols() + pi_names.size());
+	Parameters pars = pest_scenario_ptr->get_ctl_parameters();
+	pe.transform_ip(ParameterEnsemble::transStatus::CTL);
+	vector<string> pe_names = pe.get_var_names();
+	Eigen::VectorXd pe_vec;
+	pair<double, double> sim_res;
+	for (int i = 0; i < pe.shape().first; i++)
+	{
+		pe_vec = pe.get_eigen_ptr()->row(i);
+		pars.update_without_clear(pe_names, pe_vec);
+		for (int j = 0; j < pi_names.size(); j++)
+		{
+			sim_res = pi.get_pi_rec_ptr(pi_names[j]).calc_sim_and_resid(pars);
+			reals(i, j + offset) = sim_res.first;
+		}
+	}
+	var_names.emplace_back(pi_names.begin(), pi_names.end());
+}	
+
 
 void ObservationEnsemble::initialize_without_noise(int num_reals)
 {
