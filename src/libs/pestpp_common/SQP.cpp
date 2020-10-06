@@ -1536,6 +1536,11 @@ bool SeqQuadProgram::solve_new()
 		subset_size = dv.shape().first;
 	}
 
+	if (use_ensembles)
+	{
+		fill_empirical_jco(dv, oe);
+	}
+
 	dv.transform_ip(ParameterEnsemble::transStatus::NUM);
 
 	//vector to store candidate upgrade ensembles
@@ -2378,14 +2383,9 @@ vector<int> SeqQuadProgram::run_ensemble(ParameterEnsemble &_pe, ObservationEnse
 
 	constraints.process_runs(run_mgr_ptr, iter);
 
-	performance_log->log_event("forming empirical decision variable/obj cross cov matrix");
-	fill_empirical_jco(_pe, _oe);
-
+	
 	return failed_real_indices;
 }
-
-
-
 
 void SeqQuadProgram::finalize()
 {
