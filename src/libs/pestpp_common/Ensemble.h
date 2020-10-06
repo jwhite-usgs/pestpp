@@ -182,7 +182,7 @@ public:
 	ObservationEnsemble(Pest *_pest_scenario_ptr, std::mt19937* rand_gen_ptr, Eigen::MatrixXd _reals, vector<string> _real_names, vector<string> _var_names);
 
 	ObservationEnsemble() { ; }
-	ObservationEnsemble get_subset_of_vars(vector<string>& _var_names = vector<string>());
+	ObservationEnsemble get_subset_of_vars(vector<string>& _var_names);
 
 	void to_binary(string filename) { Ensemble::to_binary(filename, true); }
 	void update_from_obs(int row_idx, Observations &obs);
