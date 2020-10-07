@@ -282,10 +282,6 @@ void Mat::pseudo_inv_ip(double eigthresh, int maxsing)
 	rsvd.solve_ip(matrix, s, U, Vt, s_trunc);
 	s.array() = 1.0 / s.array();
 	matrix = Vt.transpose() * s.asDiagonal() * U.transpose();*/
-	cout << matrix.rows() << ", " << matrix.cols() << endl;
-	cout << endl;
-
-
 }
 
 void Mat::inv_ip(PerformanceLog& pfm)

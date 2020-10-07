@@ -100,7 +100,7 @@ private:
 	//map<string, double> obj_func_coef_map;
 	bool use_ensembles;
 
-	Jacobian_1to1 jco;
+	Mat jco_mat;
 
 	map<int, Eigen::VectorXd> iteration_obj_grad_map;
 

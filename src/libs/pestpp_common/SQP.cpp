@@ -23,7 +23,7 @@ SeqQuadProgram::SeqQuadProgram(Pest& _pest_scenario, FileManager& _file_manager,
 	RunManagerAbstract* _run_mgr_ptr) : pest_scenario(_pest_scenario), file_manager(_file_manager),
 	output_file_writer(_output_file_writer), performance_log(_performance_log),
 	run_mgr_ptr(_run_mgr_ptr), constraints(_pest_scenario, &_file_manager, _output_file_writer, *_performance_log),
-	jco(_file_manager, _output_file_writer), optobjfunc(_pest_scenario,&_file_manager,*_performance_log)
+	optobjfunc(_pest_scenario,&_file_manager,*_performance_log)
 {
 	rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
 	subset_rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
@@ -1443,9 +1443,9 @@ Eigen::VectorXd SeqQuadProgram::get_obj_grad_vec()
 	//finite differences
 	else
 	{
-		vector<string> names = jco.obs_and_reg_list();
+		vector<string> names = jco_mat.get_row_names();
 		int idx = find(names.begin(), names.end(), optobjfunc.get_obj_name()) - names.begin();
-		grad = jco.get_matrix_ptr()->row(idx);
+		grad = jco_mat.e_ptr()->row(idx);
 	}
 	return grad;
 
@@ -1520,8 +1520,11 @@ void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsem
 	Eigen::MatrixXd prod = oe_anom * dv_anom;
 
 	//set this matrix as the jco sqp attribute
-	Mat(active_oe.get_var_names(), active_dv.get_var_names(), prod.sparseView());
-	
+	jco_mat = Mat(active_oe.get_var_names(), active_dv.get_var_names(), prod.sparseView());
+	ss.str("");
+	ss << file_manager.get_base_filename() << "." << iter << ".jcb";
+	message(1, "saving empirical jacobian to ", ss.str());
+	jco_mat.to_binary_new(ss.str());
 }
 
 Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)
@@ -2256,6 +2259,9 @@ void SeqQuadProgram::run_jacobian(Parameters& ctl_pars, Observations& obs)
 	PriorInformation pi = pest_scenario.get_prior_info();
 	set<string> out_of_bounds;
 	bool success = true;
+
+	Jacobian_1to1 jco(file_manager, output_file_writer);
+
 	try
 	{
 		success = jco.build_runs(ctl_pars, obs, dv_names, pts, pargp_info, par_info, *run_mgr_ptr, out_of_bounds, false, true);
@@ -2315,7 +2321,7 @@ void SeqQuadProgram::run_jacobian(Parameters& ctl_pars, Observations& obs)
 
 	ss.str("");
 	ss << iter << ".jcb";
-	message(1, "saving jacobian to ", ss.str());
+	message(1, "saving finite-difference jacobian to ", ss.str());
 	jco.save(ss.str());
 
 	if (jco.get_failed_parameter_names().size() > 0)
@@ -2328,6 +2334,8 @@ void SeqQuadProgram::run_jacobian(Parameters& ctl_pars, Observations& obs)
 		throw_sqp_error(ss.str());
 	}
 	
+	jco_mat = Mat(jco.get_sim_obs_names(), jco.get_base_numeric_par_names(), jco.get_matrix());
+
 	constraints.process_runs(run_mgr_ptr, iter);
 }
 

@@ -1331,8 +1331,9 @@ void IterEnsembleSmoother::initialize()
 
 	//the hard way to restart
 	if (obs_restart_csv.size() > 0)
+	{
 		initialize_restart();
-	
+	}
 	//no restart
 	else
 	{
