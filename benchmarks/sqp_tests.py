@@ -126,7 +126,7 @@ def start_workers():
 
 if __name__ == "__main__":
     
-    shutil.copy2(os.path.join("..","exe","windows","x64","Debug","pestpp-sqp.exe"),os.path.join("..","bin","pestpp-sqp.exe"))
-    #basic_sqp_test()
-    sqp_ensemble_jco_test()
+    #shutil.copy2(os.path.join("..","exe","windows","x64","Debug","pestpp-sqp.exe"),os.path.join("..","bin","pestpp-sqp.exe"))
+    basic_sqp_test()
+    #sqp_ensemble_jco_test()
     #start_workers()

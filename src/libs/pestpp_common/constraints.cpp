@@ -1606,6 +1606,9 @@ void Constraints::process_stack_runs(RunManagerAbstract* run_mgr_ptr, int iter)
 	}
 	else
 	{
+		//no runs to process...
+		if (stack_pe_run_map.size() == 0)
+			return;
 		pfm.log_event("processing stack runs");
 		stack_info = process_stack_runs("", iter, stack_pe_run_map, run_mgr_ptr, true);
 		if (stack_info.first.size() > 0)
