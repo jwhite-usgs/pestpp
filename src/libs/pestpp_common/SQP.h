@@ -101,6 +101,7 @@ private:
 	bool use_ensembles;
 
 	Mat jco_mat;
+	Mat hessian;
 
 	map<int, Eigen::VectorXd> iteration_obj_grad_map;
 
@@ -140,14 +141,15 @@ private:
 
 	bool oe_drawn, dv_drawn;
 
-	//bool solve_old();
 	bool solve_new();
 
 	ParameterEnsemble fancy_solve_routine(double scale_val);
 
+	//get the obj func grad, handling FD and ensemble cases
 	Eigen::VectorXd get_obj_grad_vec();
 
-	Eigen::VectorXd lbfs_hess_update();
+	//update the hessian using some fanciness
+	void lbfgs_hess_update();
 
 	Eigen::VectorXd get_solve_eqp();
 

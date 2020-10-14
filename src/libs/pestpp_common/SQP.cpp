@@ -808,8 +808,10 @@ void SeqQuadProgram::initialize()
 		prep_fd();
 	}
 
-	
-	
+	performance_log->log_event("initializing hessian to ident matrix");
+	Eigen::SparseMatrix<double> ident(dv_names.size(), dv_names.size());
+	ident.setIdentity();
+	hessian = Mat(dv_names, dv_names, ident);
 
 	message(0, "initialization complete");
 }
@@ -1395,12 +1397,28 @@ void SeqQuadProgram::update_reals_by_phi(ParameterEnsemble &_pe, ObservationEnse
 }
 
 
+void SeqQuadProgram::lbfgs_hess_update()
+{
+	performance_log->log_event("updating hessian");
+	return;
+}
+
+
 ParameterEnsemble SeqQuadProgram::fancy_solve_routine(double scale_val)
 {
-	//TODO: just use lbfgs?  that seems to be the one everyone goes to 
+	
+	lbfgs_hess_update();
 
 	Eigen::VectorXd grad = get_obj_grad_vec();
 	
+	performance_log->log_event("inverting hessian");
+	Mat inv_hessian = hessian;
+	inv_hessian.pseudo_inv_ip(pest_scenario.get_svd_info().eigthresh, pest_scenario.get_svd_info().maxsing);
+
+	Eigen::SparseMatrix<double> inv_hess = *inv_hessian.e_ptr();
+
+	Eigen::VectorXd search_d = inv_hess * grad;
+
 	if (constraints.num_constraints() > 0)
 	{
 
