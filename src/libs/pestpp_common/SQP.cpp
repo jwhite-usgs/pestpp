@@ -18,11 +18,12 @@
 
 
 
-SeqQuadProgram::SeqQuadProgram(Pest &_pest_scenario, FileManager &_file_manager,
-	OutputFileWriter &_output_file_writer, PerformanceLog *_performance_log,
+SeqQuadProgram::SeqQuadProgram(Pest& _pest_scenario, FileManager& _file_manager,
+	OutputFileWriter& _output_file_writer, PerformanceLog* _performance_log,
 	RunManagerAbstract* _run_mgr_ptr) : pest_scenario(_pest_scenario), file_manager(_file_manager),
 	output_file_writer(_output_file_writer), performance_log(_performance_log),
-	run_mgr_ptr(_run_mgr_ptr), constraints(_pest_scenario, &_file_manager, _output_file_writer, *_performance_log)
+	run_mgr_ptr(_run_mgr_ptr), constraints(_pest_scenario, &_file_manager, _output_file_writer, *_performance_log),
+	optobjfunc(_pest_scenario,&_file_manager,*_performance_log)
 {
 	rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
 	subset_rand_gen = std::mt19937(pest_scenario.get_pestpp_options().get_random_seed());
@@ -373,81 +374,83 @@ void SeqQuadProgram::sanity_checks()
 	//cout << endl << endl;
 }
 
-void SeqQuadProgram::initialize_objfunc()
-{
-	//initialize the objective function
-	obj_func_str = pest_scenario.get_pestpp_options().get_opt_obj_func();
-	obj_sense = (pest_scenario.get_pestpp_options().get_opt_direction() == 1) ? "minimize" : "maximize";
-
-	ofstream& f_rec = file_manager.rec_ofstream();
-
-
-	//check if the obj_str is an observation
-	use_obj_obs = false;
-	if (pest_scenario.get_ctl_observations().find(obj_func_str) != pest_scenario.get_ctl_observations().end())
-	{
-		use_obj_obs = true;
-		obj_obs = obj_func_str;
-		//check
-		vector<string> cnames = constraints.get_obs_constraint_names();
-		set<string> names(cnames.begin(), cnames.end());
-		if (names.find(obj_obs) != names.end())
-		{
-			throw_sqp_error("objective function obs is a constraint, #sad");
-		}
-		names.clear();
-		cnames = constraints.get_nz_obs_names();
-		names.insert(cnames.begin(), cnames.end());
-		if (names.find(obj_obs) != names.end())
-		{
-			throw_sqp_error("objective function obs has non-zero weight and chance constraints are active");
-		}
-	}
-
-	else
-	{
-		if (obj_func_str.size() == 0)
-		{
-			f_rec << " warning: no ++opt_objective_function-->forming a generic objective function (1.0 coef for each decision var)" << endl;
-			for (auto& name : dv_names)
-				obj_func_coef_map[name] = 1.0;
-		}
-
-		//or if it is a prior info equation
-		else if (pest_scenario.get_prior_info().find(obj_func_str) != pest_scenario.get_prior_info().end())
-		{
-			obj_func_coef_map = pest_scenario.get_prior_info().get_pi_rec_ptr(obj_func_str).get_atom_factors();
-		}
-		else
-		{
-			//check if this obj_str is a filename
-			ifstream if_obj(obj_func_str);
-			if (!if_obj.good())
-				throw_sqp_error("unrecognized ++opt_objective_function arg (tried file name, obs name, prior info name): " + obj_func_str);
-			else
-				obj_func_coef_map = pest_utils::read_twocol_ascii_to_map(obj_func_str);
-		}
-
-
-		//check that all obj_coefs are decsision vars
-		vector<string> missing_vars;
-		set<string> s_dv_names(dv_names.begin(), dv_names.end());
-		for (auto& coef : obj_func_coef_map)
-			if (s_dv_names.find(coef.first) == s_dv_names.end())
-				missing_vars.push_back(coef.first);
-		if (missing_vars.size() > 0)
-		{
-			stringstream ss;
-			ss << "the following objective function components are not decision variables: ";
-			for (auto m : missing_vars)
-			{
-				ss << m << ",";
-				
-			}
-			throw_sqp_error(ss.str());
-		}
-	}
-}
+//void SeqQuadProgram::initialize_objfunc()
+//{
+//	
+//
+//	//initialize the objective function
+//	obj_func_str = pest_scenario.get_pestpp_options().get_opt_obj_func();
+//	obj_sense = (pest_scenario.get_pestpp_options().get_opt_direction() == 1) ? "minimize" : "maximize";
+//
+//	ofstream& f_rec = file_manager.rec_ofstream();
+//
+//
+//	//check if the obj_str is an observation
+//	use_obj_obs = false;
+//	if (pest_scenario.get_ctl_observations().find(obj_func_str) != pest_scenario.get_ctl_observations().end())
+//	{
+//		use_obj_obs = true;
+//		obj_obs = obj_func_str;
+//		//check
+//		vector<string> cnames = constraints.get_obs_constraint_names();
+//		set<string> names(cnames.begin(), cnames.end());
+//		if (names.find(obj_obs) != names.end())
+//		{
+//			throw_sqp_error("objective function obs is a constraint, #sad");
+//		}
+//		names.clear();
+//		cnames = constraints.get_nz_obs_names();
+//		names.insert(cnames.begin(), cnames.end());
+//		if (names.find(obj_obs) != names.end())
+//		{
+//			throw_sqp_error("objective function obs has non-zero weight and chance constraints are active");
+//		}
+//	}
+//
+//	else
+//	{
+//		if (obj_func_str.size() == 0)
+//		{
+//			f_rec << " warning: no ++opt_objective_function-->forming a generic objective function (1.0 coef for each decision var)" << endl;
+//			for (auto& name : dv_names)
+//				obj_func_coef_map[name] = 1.0;
+//		}
+//
+//		//or if it is a prior info equation
+//		else if (pest_scenario.get_prior_info().find(obj_func_str) != pest_scenario.get_prior_info().end())
+//		{
+//			obj_func_coef_map = pest_scenario.get_prior_info().get_pi_rec_ptr(obj_func_str).get_atom_factors();
+//		}
+//		else
+//		{
+//			//check if this obj_str is a filename
+//			ifstream if_obj(obj_func_str);
+//			if (!if_obj.good())
+//				throw_sqp_error("unrecognized ++opt_objective_function arg (tried file name, obs name, prior info name): " + obj_func_str);
+//			else
+//				obj_func_coef_map = pest_utils::read_twocol_ascii_to_map(obj_func_str);
+//		}
+//
+//
+//		//check that all obj_coefs are decsision vars
+//		vector<string> missing_vars;
+//		set<string> s_dv_names(dv_names.begin(), dv_names.end());
+//		for (auto& coef : obj_func_coef_map)
+//			if (s_dv_names.find(coef.first) == s_dv_names.end())
+//				missing_vars.push_back(coef.first);
+//		if (missing_vars.size() > 0)
+//		{
+//			stringstream ss;
+//			ss << "the following objective function components are not decision variables: ";
+//			for (auto m : missing_vars)
+//			{
+//				ss << m << ",";
+//				
+//			}
+//			throw_sqp_error(ss.str());
+//		}
+//	}
+//}
 
 
 bool SeqQuadProgram::initialize_restart()
@@ -604,6 +607,8 @@ void SeqQuadProgram::initialize()
 	act_par_names = pest_scenario.get_ctl_ordered_adj_par_names();
 
 	stringstream ss;
+	current_pars = pest_scenario.get_ctl_parameters();
+	current_obs = pest_scenario.get_ctl_observations();
 
 	if (pest_scenario.get_control_info().noptmax == 0)
 	{
@@ -649,7 +654,7 @@ void SeqQuadProgram::initialize()
 		_oe.to_csv(obs_csv);
 
 		ph.update(_oe, _pe);
-		message(0, "control file parameter phi report:");
+		message(0, "control file parameter sum-of-squared residual report:");
 		ph.report(true);
 		ph.write(0, 1);
 		save_base_real_par_rei(pest_scenario, _pe, _oe, output_file_writer, file_manager, -1);			
@@ -682,7 +687,6 @@ void SeqQuadProgram::initialize()
 				ss << m << ",";
 			throw_sqp_error(ss.str());
 		}
-
 
 		//find the parameter in the dec var groups
 		ParameterGroupInfo pinfo = pest_scenario.get_base_group_info();
@@ -736,12 +740,13 @@ void SeqQuadProgram::initialize()
 
 	constraints.initialize(dv_names, numeric_limits<double>::max());
 	constraints.initial_report();
+
+	optobjfunc.initialize(constraints.get_obs_constraint_names(), dv_names);
+
 	//some risk-based stuff here
 	string chance_points = ppo->get_opt_chance_points();
 	if (chance_points == "ALL")
 	{
-		//evaluate the chance constraints at every individual, very costly, but most robust
-		//throw_sqp_error("'opt_chance_points' == 'all' not implemented");
 		chancepoints = chancePoints::ALL;
 	}
 
@@ -750,7 +755,6 @@ void SeqQuadProgram::initialize()
 		//evaluate the chance constraints only at the population member nearest the optimal tradeoff.
 		//much cheaper, but assumes linear coupling
 		chancepoints = chancePoints::SINGLE;
-
 	}
 	else
 	{
@@ -792,15 +796,59 @@ void SeqQuadProgram::initialize()
 
 	int num_reals = pest_scenario.get_pestpp_options().get_sqp_num_reals();
 
+	use_ensembles = ppo->get_sqp_ensemble_gradient();
+
+	if (use_ensembles)
+	{
+		prep_ensembles();
+		pcs = ParChangeSummarizer(&dv_base, &file_manager, &output_file_writer);
+	}
+	else
+	{
+		prep_fd();
+	}
+
+	performance_log->log_event("initializing hessian to ident matrix");
+	Eigen::SparseMatrix<double> ident(dv_names.size(), dv_names.size());
+	ident.setIdentity();
+	hessian = Mat(dv_names, dv_names, ident);
+
+	message(0, "initialization complete");
+}
+
+
+void SeqQuadProgram::prep_fd()
+{
+	message(0, "using finite-difference-based gradient approximation");
+
+	stringstream ss;
+	string jco_filename = pest_scenario.get_pestpp_options().get_basejac_filename();
+	if (jco_filename.size() > 0)
+	{
+		throw_sqp_error("base jco restart not implemented yet");
+	}
+	else
+	{
+		message(1, "running initial jacobian");
+		run_jacobian(current_pars, current_obs);
+	}
+}
+
+
+
+void SeqQuadProgram::prep_ensembles()
+{
+	message(0, "using ensemble-based gradient approximation");
+	stringstream ss;
 	dv_drawn = initialize_dv(parcov);
 
 	oe_drawn = initialize_restart();
-	
+
 	try
 	{
 		dv.check_for_dups();
 	}
-	catch (const exception &e)
+	catch (const exception& e)
 	{
 		string message = e.what();
 		throw_sqp_error("error in dv ensemble: " + message);
@@ -810,7 +858,7 @@ void SeqQuadProgram::initialize()
 	{
 		oe.check_for_dups();
 	}
-	catch (const exception &e)
+	catch (const exception& e)
 	{
 		string message = e.what();
 		throw_sqp_error("error in observation ensemble: " + message);
@@ -835,7 +883,7 @@ void SeqQuadProgram::initialize()
 				ss.str("");
 				ss << "dv en has " << dv.shape().first << " realizations, compared to " << oe.shape().first << " obs realizations";
 				message(1, ss.str());
-				message(1," the realization names are compatible");
+				message(1, " the realization names are compatible");
 				message(1, "re-indexing obs en to align with dv en...");
 
 				oe.reorder(dv.get_real_names(), vector<string>());
@@ -875,8 +923,8 @@ void SeqQuadProgram::initialize()
 			add_bases();*/
 
 
-	//now we check to see if we need to try to align the par and obs en
-	//this would only be needed if either of these were not drawn
+			//now we check to see if we need to try to align the par and obs en
+			//this would only be needed if either of these were not drawn
 	if (!dv_drawn || !oe_drawn)
 	{
 		bool aligned = dv.try_align_other_rows(performance_log, oe);
@@ -900,7 +948,7 @@ void SeqQuadProgram::initialize()
 	{
 		message(1, "WARNING: common realization names shared between the dv and observation ensembles but they are not in the same row locations, see .rec file for listing");
 		ofstream& frec = file_manager.rec_ofstream();
-		frec << endl <<  "WARNING: the following " << misaligned.size() << " realization names are shared between the dv and observation ensembles but they are not in the same row locations:" << endl;
+		frec << endl << "WARNING: the following " << misaligned.size() << " realization names are shared between the dv and observation ensembles but they are not in the same row locations:" << endl;
 		for (auto ma : misaligned)
 			frec << ma << endl;
 	}
@@ -1014,8 +1062,8 @@ void SeqQuadProgram::initialize()
 
 	//TODO: I think the base_oe should just be a "no noise" obs ensemble?
 	oe_base = oe; //copy
-	
-    //reorder this for later...
+
+	//reorder this for later...
 	oe_base.reorder(vector<string>(), act_obs_names);
 
 	dv_base = dv; //copy
@@ -1033,7 +1081,7 @@ void SeqQuadProgram::initialize()
 
 		dv.transform_ip(ParameterEnsemble::transStatus::NUM);
 	}
-	
+
 	ss.str("");
 	if (pest_scenario.get_pestpp_options().get_ies_save_binary())
 	{
@@ -1087,10 +1135,7 @@ void SeqQuadProgram::initialize()
 		message(0, s);
 	}
 
-	pcs = ParChangeSummarizer(&dv_base, &file_manager,&output_file_writer);
-	
 
-	message(0, "initialization complete");
 }
 
 
@@ -1351,12 +1396,164 @@ void SeqQuadProgram::update_reals_by_phi(ParameterEnsemble &_pe, ObservationEnse
 
 }
 
+
+void SeqQuadProgram::lbfgs_hess_update()
+{
+	performance_log->log_event("updating hessian");
+	return;
+}
+
+
 ParameterEnsemble SeqQuadProgram::fancy_solve_routine(double scale_val)
 {
-	ParameterEnsemble dv_candidate = dv; //copy
-	//lots of fancy maths here...
-	return dv_candidate;
+	
+	lbfgs_hess_update();
+
+	Eigen::VectorXd grad = get_obj_grad_vec();
+	
+	performance_log->log_event("inverting hessian");
+	Mat inv_hessian = hessian;
+	inv_hessian.pseudo_inv_ip(pest_scenario.get_svd_info().eigthresh, pest_scenario.get_svd_info().maxsing);
+
+	Eigen::SparseMatrix<double> inv_hess = *inv_hessian.e_ptr();
+
+	Eigen::VectorXd search_d = inv_hess * grad;
+
+	if (constraints.num_constraints() > 0)
+	{
+
+	}
+
+	else
+	{
+
+	}
+
+	return ParameterEnsemble();
 }
+
+Eigen::VectorXd SeqQuadProgram::get_obj_grad_vec()
+{
+	stringstream ss;
+	Eigen::VectorXd grad(dv_names.size());
+	if (iter > 1)
+	{
+		performance_log->log_event("reusing ensemble-based obj grad vec from last iteration testing");
+		if (iteration_obj_grad_map.find(iter - 1) == iteration_obj_grad_map.end())
+		{
+			ss.str("");
+			ss << " previous iteration (" << iter - 1 << ") not in iteration_obj_grad_map";
+			throw_sqp_error(ss.str());
+		}
+
+		grad = iteration_obj_grad_map[iter - 1];
+		return grad;
+	}
+	Covariance dv_cov;
+	Mat dv_obs_ccov;
+	if (use_ensembles)
+	{
+
+		
+		
+	}
+
+	//finite differences
+	else
+	{
+		vector<string> names = jco_mat.get_row_names();
+		int idx = find(names.begin(), names.end(), optobjfunc.get_obj_name()) - names.begin();
+		grad = jco_mat.e_ptr()->row(idx);
+	}
+	return grad;
+
+}
+
+void SeqQuadProgram::fill_empirical_jco(ParameterEnsemble& _dv, ObservationEnsemble& _oe)
+{
+	stringstream ss;
+	if (_dv.shape().first != _oe.shape().first)
+	{
+		ss.str("");
+		ss << "fill_empirical_jco: _dv has different number of realizations than _oe: " << _dv.shape().first << " vs " << _oe.shape().first;
+		throw_sqp_error(ss.str());
+	}
+	
+
+	//TODO: think about prior info obj and constraints...
+	vector<string> cnames = constraints.get_obs_constraint_names();
+	if (optobjfunc.get_objtype() == OptObjFunc::objType::OBS)
+		cnames.push_back(optobjfunc.get_obj_name());
+	ObservationEnsemble active_oe = _oe.get_subset_of_vars(cnames);
+
+	//do this after the prior info append to make sure we are in num status
+	_dv.transform_ip(ParameterEnsemble::transStatus::NUM);
+	ParameterEnsemble active_dv = _dv.get_subset_of_vars(dv_names);
+	
+	vector<string> pi_names = constraints.get_pi_constraint_names();
+	if (pi_names.size() > 0)
+	{
+		ObservationEnsemble pi_oe(&pest_scenario, &rand_gen);
+
+		pi_oe.from_prior_info(_dv, pi_names);
+		active_oe.append_other_cols(pi_oe);
+	}
+
+	//TODO: do we need to use the ensemble empirical cov matrix?  what if the user supplied a parcov?
+	//TODO: think about a low-rank par cov approx similar to ies cause this thing will be too large
+	//to deal with for very high-dimen problems
+	performance_log->log_event("forming empirical decision variable cov matrix");
+	Covariance dv_cov_inv = get_decvar_empirical_cov(active_dv);
+	
+	performance_log->log_event("covariance matrix adaptation");	
+
+	performance_log->log_event("pseudo inverse of empirical dec var cov matrix");
+	double eigthresh = pest_scenario.get_svd_info().eigthresh;
+	int maxsing = pest_scenario.get_svd_info().maxsing;
+	dv_cov_inv.pseudo_inv_ip(eigthresh, maxsing);
+	
+	//get the empirical sqrt variance (low-rank covariance) for the constraints and the obj func
+	Covariance oe_cov = active_oe.get_diagonal_cov_matrix(true, true);
+
+	performance_log->log_event("forming ensemble-based obj grad vector");
+	
+	double scale = 1.0 / (double(_dv.shape().first - 1));
+	
+	Eigen::MatrixXd dv_anom = active_dv.get_eigen_anomalies();
+	dv_anom = *dv_cov_inv.e_ptr() * dv_anom.transpose();
+	dv_anom *= scale;
+
+	Eigen::MatrixXd oe_anom = active_oe.get_eigen_anomalies();
+	oe_anom = *oe_cov.e_ptr() * oe_anom.transpose();
+	oe_anom *= scale;
+
+	//get the pseudo inv of the scaled dv anomaly matrix
+	SVD_REDSVD rsvd(maxsing, eigthresh);
+	/*Eigen::MatrixXd U, V, S;
+	rsvd.solve_ip(dv_anom, S, U, V, eigthresh,maxsing);
+	S.array() = 1.0 / S.array();
+	dv_anom = V * S * U.transpose();*/
+	dv_anom = rsvd.get_pseudo_inv(dv_anom, eigthresh, maxsing);
+
+	Eigen::MatrixXd prod = oe_anom * dv_anom;
+
+	//set this matrix as the jco sqp attribute
+	jco_mat = Mat(active_oe.get_var_names(), active_dv.get_var_names(), prod.sparseView());
+	ss.str("");
+	ss << file_manager.get_base_filename() << "." << iter << ".jcb";
+	message(1, "saving empirical jacobian to ", ss.str());
+	jco_mat.to_binary_new(ss.str());
+}
+
+Covariance SeqQuadProgram::get_decvar_empirical_cov(ParameterEnsemble& _dv)
+{
+	//pair<Covariance, Covariance> cov_pair = _dv.get_empirical_cov_matrices(&file_manager);
+	//TODO: should we use the shrunk empirical cov?  maybe since it is a better approx than the moore-penrose pseudo inverse
+	//TODO: or use the low rank approx
+	return _dv.get_diagonal_cov_matrix(false, false);
+	//return cov_pair.first;
+}
+
 
 bool SeqQuadProgram::solve_new()
 {
@@ -1385,6 +1582,11 @@ bool SeqQuadProgram::solve_new()
 		frec << "  ...reducing ++ies_subset_size to " << dv.shape().first << endl;
 		cout << "  ...reducing ++ies_subset_size to " << dv.shape().first << endl;
 		subset_size = dv.shape().first;
+	}
+
+	if (use_ensembles)
+	{
+		fill_empirical_jco(dv, oe);
 	}
 
 	dv.transform_ip(ParameterEnsemble::transStatus::NUM);
@@ -1444,7 +1646,11 @@ bool SeqQuadProgram::solve_new()
 	int best_idx = -1;
 	double best_mean = 1.0e+30, best_std = 1.0e+30;
 	double mean, std;
+	
+	//temp just to keep from trying to run trash when testing
+	return true;
 
+	
 	message(0, "running candidate decision variable ensembles");
 	vector<ObservationEnsemble> oe_lams = run_candidate_ensembles(dv_candidates, scale_vals);
 
@@ -1695,6 +1901,7 @@ bool SeqQuadProgram::solve_new()
 	//report_and_save();
 	return true;
 }
+
 
 
 void SeqQuadProgram::report_and_save()
@@ -2028,24 +2235,127 @@ void SeqQuadProgram::queue_chance_runs()
 	stringstream ss;
 	if (constraints.should_update_chance(iter))
 	{
-		//just use dp member nearest the mean dec var values
-		dv.transform_ip(ParameterEnsemble::transStatus::NUM);
-		vector<double> t = dv.get_mean_stl_var_vector();
-		Eigen::VectorXd dv_mean = stlvec_2_eigenvec(t);
-		t.resize(0);
-			
-		ss << "using mean decision variables for chance calculations";
-		
-		Parameters pars = pest_scenario.get_ctl_parameters();
-		pest_scenario.get_base_par_tran_seq().ctl2numeric_ip(pars);
-		pars.update_without_clear(dv.get_var_names(), dv_mean);
-		Observations obs = pest_scenario.get_ctl_observations();
-		pest_scenario.get_base_par_tran_seq().numeric2ctl_ip(pars);
-		constraints.add_runs(iter, pars, obs, run_mgr_ptr);
+		if (!use_ensembles)
+		{
+			constraints.add_runs(iter, current_pars, current_obs, run_mgr_ptr);
+		}
+		else if (chancepoints == chancePoints::SINGLE)
+		{
+			//just use dp member nearest the mean dec var values
+			dv.transform_ip(ParameterEnsemble::transStatus::NUM);
+			vector<double> t = dv.get_mean_stl_var_vector();
+			Eigen::VectorXd dv_mean = stlvec_2_eigenvec(t);
+			t.resize(0);
+
+			ss << "using mean decision variables for chance calculations";
+
+			Parameters pars = pest_scenario.get_ctl_parameters();
+			pest_scenario.get_base_par_tran_seq().ctl2numeric_ip(pars);
+			pars.update_without_clear(dv.get_var_names(), dv_mean);
+			Observations obs = pest_scenario.get_ctl_observations();
+			pest_scenario.get_base_par_tran_seq().numeric2ctl_ip(pars);
+			constraints.add_runs(iter, pars, obs, run_mgr_ptr);
+		}
+		else if (chancepoints == chancePoints::ALL)
+		{
+			constraints.add_runs(iter, dv, current_obs, run_mgr_ptr);
+		}
+	
 	}
 }
 
+void SeqQuadProgram::run_jacobian(Parameters& ctl_pars, Observations& obs)
+{
+	stringstream ss;
+	ss << "queuing " << dv_names.size() << " decision-variable finite-difference runs";
+	performance_log->log_event(ss.str());
+	message(1, ss.str());
+	run_mgr_ptr->reinitialize();
+	ParamTransformSeq pts = pest_scenario.get_base_par_tran_seq();
+	ParameterGroupInfo pargp_info = pest_scenario.get_base_group_info();
+	ParameterInfo par_info = pest_scenario.get_ctl_parameter_info();
+	PriorInformation pi = pest_scenario.get_prior_info();
+	set<string> out_of_bounds;
+	bool success = true;
 
+	Jacobian_1to1 jco(file_manager, output_file_writer);
+
+	try
+	{
+		success = jco.build_runs(ctl_pars, obs, dv_names, pts, pargp_info, par_info, *run_mgr_ptr, out_of_bounds, false, true);
+	}
+	catch (const exception& e)
+	{
+		stringstream ss;
+		ss << "run_jacobian() error queueing runs: " << e.what();
+		throw_sqp_error(ss.str());
+	}
+	catch (...)
+	{
+		throw_sqp_error(string("run_jacobian() error queueing runs"));
+	}
+	if (!success)
+	{
+		throw_sqp_error(string("run_jacobian() error queueing runs"));
+	}
+	queue_chance_runs();
+
+	performance_log->log_event("making runs");
+	try
+	{
+		run_mgr_ptr->run();
+	}
+	catch (const exception& e)
+	{
+		stringstream ss;
+		ss << "error running jacobian: " << e.what();
+		throw_sqp_error(ss.str());
+	}
+	catch (...)
+	{
+		throw_sqp_error(string("error running jacobian"));
+	}
+
+	performance_log->log_event("processing runs");
+	
+	try
+	{
+		success = jco.process_runs(pts, pargp_info, *run_mgr_ptr, pi, false, false);
+	}
+	catch (const exception& e)
+	{
+		stringstream ss;
+		ss << "error processing runs: " << e.what();
+		throw_sqp_error(ss.str());
+	}
+	catch (...)
+	{
+		throw_sqp_error(string("error processing runs"));
+	}
+	if (!success)
+	{
+		throw_sqp_error(string("error processing runs"));
+	}
+
+	ss.str("");
+	ss << iter << ".jcb";
+	message(1, "saving finite-difference jacobian to ", ss.str());
+	jco.save(ss.str());
+
+	if (jco.get_failed_parameter_names().size() > 0)
+	{
+		//for perturb runs, we have to be strict: we need all decision variables
+		ss.str("");
+		ss << "run_jacobian(): the following decision variable runs failed: ";
+		for (auto f : jco.get_failed_parameter_names())
+			ss << f << ",";
+		throw_sqp_error(ss.str());
+	}
+	
+	jco_mat = Mat(jco.get_sim_obs_names(), jco.get_base_numeric_par_names(), jco.get_matrix());
+
+	constraints.process_runs(run_mgr_ptr, iter);
+}
 
 vector<int> SeqQuadProgram::run_ensemble(ParameterEnsemble &_pe, ObservationEnsemble &_oe, const vector<int> &real_idxs)
 {
@@ -2130,9 +2440,9 @@ vector<int> SeqQuadProgram::run_ensemble(ParameterEnsemble &_pe, ObservationEnse
 
 	constraints.process_runs(run_mgr_ptr, iter);
 
+	
 	return failed_real_indices;
 }
-
 
 void SeqQuadProgram::finalize()
 {
