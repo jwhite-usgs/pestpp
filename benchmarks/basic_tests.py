@@ -1028,8 +1028,5 @@ if __name__ == "__main__":
     mf6_v5_opt_stack_test()
     #mf6_v5_glm_test()
     #cmdline_test()
-<<<<<<< HEAD
     #basic_sqp_test()
     start_workers()
-=======
->>>>>>> upstream/develop
