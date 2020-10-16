@@ -1022,11 +1022,14 @@ if __name__ == "__main__":
     #salib_verf()
     #tplins1_test()
     #ext_stdcol_test()
-    #mf6_v5_ies_test()
+    mf6_v5_ies_test()
     #mf6_v5_sen_test()
     shutil.copy2(os.path.join("..","exe","windows","x64","Debug","pestpp-opt.exe"),os.path.join("..","bin","pestpp-opt.exe"))
     mf6_v5_opt_stack_test()
     #mf6_v5_glm_test()
     #cmdline_test()
+<<<<<<< HEAD
     #basic_sqp_test()
     start_workers()
+=======
+>>>>>>> upstream/develop
