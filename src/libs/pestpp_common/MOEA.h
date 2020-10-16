@@ -147,6 +147,8 @@ private:
 	bool initialize_dv_population();
 	void initialize_obs_restart_population();
 
+	void initialize_objectives();
+
 	ParameterEnsemble generate_population();
 
 	ParameterEnsemble generate_diffevol_population(int num_members, ParameterEnsemble& _dp);

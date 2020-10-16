@@ -596,16 +596,16 @@ map<string, map<string, double>> MOEA::obj_func_report(ParameterEnsemble& _dp, O
 
 	int max_len = get_max_len_obj_name();
 	string dir;
-	frec << left << setw(max_len) << "objective function" << right << setw(10) << "direction" << setw(10) << "mean" << setw(20) << "standard devation" << setw(12) << "min" << setw(12) << "max" << endl;
+	frec << left << setw(max_len) << "objective function" << right << setw(10) << "direction" << setw(15) << "mean" << setw(20) << "standard devation" << setw(12) << "min" << setw(12) << "max" << endl;
 	for (auto obs_obj : obs_obj_names)
 	{
 
 		frec << left << setw(max_len) << obs_obj;
-		dir = "minimize";
+		dir = "min";
 		if (obj_dir_mult[obs_obj] == -1)
-			dir = "maximize";
+			dir = "max";
 		frec << right << setw(10) << dir;
-		frec << right << setw(10) << summary[obs_obj]["mean"];
+		frec << right << setw(15) << summary[obs_obj]["mean"];
 		frec << setw(20) << summary[obs_obj]["std"];
 		frec << setw(12) << summary[obs_obj]["min"];
 		frec << setw(12) << summary[obs_obj]["max"] << endl;
@@ -615,11 +615,11 @@ map<string, map<string, double>> MOEA::obj_func_report(ParameterEnsemble& _dp, O
 	for (auto pi_obj : pi_obj_names)
 	{
 		frec << left << setw(max_len) << pi_obj;
-		dir = "minimize";
+		dir = "min";
 		if (obj_dir_mult[pi_obj] == -1)
-			dir = "maximize";
+			dir = "max";
 		frec << right << setw(10) << dir;
-		frec << right << setw(10) << summary[pi_obj]["mean"];
+		frec << right << setw(15) << summary[pi_obj]["mean"];
 		frec << setw(20) << summary[pi_obj]["std"];
 		frec << setw(12) << summary[pi_obj]["min"];
 		frec << setw(12) << summary[pi_obj]["max"] << endl;
@@ -1036,7 +1036,7 @@ void MOEA::initialize()
 	if (pest_scenario.get_control_info().noptmax == 0)
 	{
 		message(0, "'noptmax'=0, running control file parameter values and quitting");
-
+		initialize_objectives();
 		Parameters pars = pest_scenario.get_ctl_parameters();
 		ParamTransformSeq pts = pest_scenario.get_base_par_tran_seq();
 
@@ -1193,161 +1193,7 @@ void MOEA::initialize()
 	}
 
 
-	//process objectives
-	Constraints::ConstraintSense gt = Constraints::ConstraintSense::greater_than, lt = Constraints::ConstraintSense::less_than;
-	pair<Constraints::ConstraintSense, string> sense;
-	map<string, string> obj_sense_map;
-	vector<string> onames = pest_scenario.get_ctl_ordered_nz_obs_names();
-	vector<string> passed_obj_names = ppo->get_mou_objectives();
-	if (passed_obj_names.size() == 0)
-	{
-		for (auto oname : onames)
-		{
-			sense = Constraints::get_sense_from_group_name(pest_scenario.get_ctl_observation_info().get_group(oname));
-			if (sense.first == gt)
-			{
-				obs_obj_names.push_back(oname);
-				obj_sense_map[oname] = "maximize";
-				obj_dir_mult[oname] = -1.0;
-			}
-			else if (sense.first == lt)
-			{
-				obs_obj_names.push_back(oname);
-				obj_sense_map[oname] = "minimize";
-				obj_dir_mult[oname] = 1.0;
-			}
-		}
-
-		onames = pest_scenario.get_ctl_ordered_pi_names();
-		for (auto oname : onames)
-		{
-			if (pest_scenario.get_prior_info().get_pi_rec_ptr(oname).get_weight() == 0.0)
-				continue;
-			sense = Constraints::get_sense_from_group_name(pest_scenario.get_prior_info().get_pi_rec_ptr(oname).get_group());
-			if (sense.first == gt)
-			{
-				pi_obj_names.push_back(oname);
-				obj_sense_map[oname] = "maximize";
-				obj_dir_mult[oname] = -1.0;
-			}
-			else if (sense.first == lt)
-			{
-				pi_obj_names.push_back(oname);
-				obj_sense_map[oname] = "minimize";
-				obj_dir_mult[oname] = 1.0;
-			}
-		}
-
-		message(1, "'mou_objectives' not passed, using all nonzero weighted obs and prior info eqs that use the proper obs group naming convention");
-	}
-	else
-	{
-		vector<string> onames = pest_scenario.get_ctl_ordered_nz_obs_names();
-		set<string> oset(onames.begin(), onames.end());
-		onames = pest_scenario.get_ctl_ordered_pi_names();
-		set<string> pinames(onames.begin(), onames.end());
-		onames.clear();
-		vector<string> missing,keep_obs, keep_pi,err_sense;
-		for (auto obj_name : obs_obj_names)
-		{
-			if ((oset.find(obj_name) == oset.end()) && (pinames.find(obj_name) == pinames.end()))
-				missing.push_back(obj_name);
-			else if (oset.find(obj_name) != oset.end())
-			{
-				sense = Constraints::get_sense_from_group_name(pest_scenario.get_ctl_observation_info().get_group(obj_name));
-				if ((sense.first != gt) && (sense.first != lt))
-					err_sense.push_back(obj_name);
-				else
-				{
-					if (sense.first == gt)
-					{
-						keep_obs.push_back(obj_name);
-						obj_sense_map[obj_name] = "maximize";
-						obj_dir_mult[obj_name] = -1.0;
-					}
-					else if (sense.first == lt)
-					{
-						keep_obs.push_back(obj_name);
-						obj_sense_map[obj_name] = "minimize";
-						obj_dir_mult[obj_name] = 1.0;
-					}
-					
-				}
-			}
-			else
-			{
-				sense = Constraints::get_sense_from_group_name(pest_scenario.get_prior_info().get_pi_rec_ptr(obj_name).get_group());
-				if ((sense.first != gt) && (sense.first != lt))
-					err_sense.push_back(obj_name);
-				else
-				{
-					if (sense.first == gt)
-					{
-						keep_pi.push_back(obj_name);
-						obj_sense_map[obj_name] = "maximize";
-						obj_dir_mult[obj_name] = -1.0;
-					}
-					else if (sense.first == lt)
-					{
-						keep_pi.push_back(obj_name);
-						obj_sense_map[obj_name] = "minimize";
-						obj_dir_mult[obj_name] = 1.0;
-					}
-
-				}
-			}
-		}
-		if (err_sense.size() > 0)
-		{
-			ss.str("");
-			ss << "the following non-zero weighted 'mou_objectives' do not have the correct obs group naming convention (needed to identify objective direction):";
-			for (auto e : err_sense)
-				ss << e << ";";
-			throw_moea_error(ss.str());
-		}
-		if (keep_obs.size() == 0)
-		{
-			throw_moea_error("none of the supplied observation-based 'mou_objectives' were found in the zero-weighted observations");
-		}
-		
-		else if (missing.size() > 0)
-		{
-			ss.str("");
-			ss << "WARNING: the following mou_objectives were not found in the zero-weighted observations or prior info eqs: ";
-			for (auto m : missing)
-				ss << m << ",";
-			message(1, ss.str());
-
-		}
-		obs_obj_names = keep_obs;
-		pi_obj_names = keep_pi;
-	}
-
-	ss.str("");
-	ss << "...using the following observations as objectives: " << endl;
-	for (auto name : obs_obj_names)
-	{
-		ss << setw(30) << name << "   " << obj_sense_map[name] << endl;
-	}
-	file_manager.rec_ofstream() << ss.str();
-	cout << ss.str();
-
-	if (pi_obj_names.size() > 0)
-	{
-		ss.str("");
-		ss << "...using the following prior info eqs as objectives: " << endl;
-		for (auto name : pi_obj_names)
-		{
-			ss << setw(30) << name << "   " << obj_sense_map[name] << endl;
-		}
-		file_manager.rec_ofstream() << ss.str();
-		cout << ss.str();
-
-	}
-	
-	if (obs_obj_names.size() + pi_obj_names.size() > 5)
-		message(1, "WARNING: more than 5 objectives, this is pushing the limits!");
-
+	initialize_objectives();
 
 	//TODO: report constraints being applied
 
@@ -1542,6 +1388,168 @@ void MOEA::initialize()
 	message(0, "initialization complete");
 }
 
+
+void MOEA::initialize_objectives()
+{
+	stringstream ss;
+	PestppOptions* ppo = pest_scenario.get_pestpp_options_ptr();
+	//process objectives
+	Constraints::ConstraintSense gt = Constraints::ConstraintSense::greater_than, lt = Constraints::ConstraintSense::less_than;
+	pair<Constraints::ConstraintSense, string> sense;
+	map<string, string> obj_sense_map;
+	vector<string> onames = pest_scenario.get_ctl_ordered_nz_obs_names();
+	vector<string> passed_obj_names = ppo->get_mou_objectives();
+	if (passed_obj_names.size() == 0)
+	{
+		for (auto oname : onames)
+		{
+			sense = Constraints::get_sense_from_group_name(pest_scenario.get_ctl_observation_info().get_group(oname));
+			if (sense.first == gt)
+			{
+				obs_obj_names.push_back(oname);
+				obj_sense_map[oname] = "maximize";
+				obj_dir_mult[oname] = -1.0;
+			}
+			else if (sense.first == lt)
+			{
+				obs_obj_names.push_back(oname);
+				obj_sense_map[oname] = "minimize";
+				obj_dir_mult[oname] = 1.0;
+			}
+		}
+
+		onames = pest_scenario.get_ctl_ordered_pi_names();
+		for (auto oname : onames)
+		{
+			if (pest_scenario.get_prior_info().get_pi_rec_ptr(oname).get_weight() == 0.0)
+				continue;
+			sense = Constraints::get_sense_from_group_name(pest_scenario.get_prior_info().get_pi_rec_ptr(oname).get_group());
+			if (sense.first == gt)
+			{
+				pi_obj_names.push_back(oname);
+				obj_sense_map[oname] = "maximize";
+				obj_dir_mult[oname] = -1.0;
+			}
+			else if (sense.first == lt)
+			{
+				pi_obj_names.push_back(oname);
+				obj_sense_map[oname] = "minimize";
+				obj_dir_mult[oname] = 1.0;
+			}
+		}
+
+		message(1, "'mou_objectives' not passed, using all nonzero weighted obs and prior info eqs that use the proper obs group naming convention");
+	}
+	else
+	{
+		vector<string> onames = pest_scenario.get_ctl_ordered_nz_obs_names();
+		set<string> oset(onames.begin(), onames.end());
+		onames = pest_scenario.get_ctl_ordered_pi_names();
+		set<string> pinames(onames.begin(), onames.end());
+		onames.clear();
+		vector<string> missing, keep_obs, keep_pi, err_sense;
+		for (auto obj_name : obs_obj_names)
+		{
+			if ((oset.find(obj_name) == oset.end()) && (pinames.find(obj_name) == pinames.end()))
+				missing.push_back(obj_name);
+			else if (oset.find(obj_name) != oset.end())
+			{
+				sense = Constraints::get_sense_from_group_name(pest_scenario.get_ctl_observation_info().get_group(obj_name));
+				if ((sense.first != gt) && (sense.first != lt))
+					err_sense.push_back(obj_name);
+				else
+				{
+					if (sense.first == gt)
+					{
+						keep_obs.push_back(obj_name);
+						obj_sense_map[obj_name] = "maximize";
+						obj_dir_mult[obj_name] = -1.0;
+					}
+					else if (sense.first == lt)
+					{
+						keep_obs.push_back(obj_name);
+						obj_sense_map[obj_name] = "minimize";
+						obj_dir_mult[obj_name] = 1.0;
+					}
+
+				}
+			}
+			else
+			{
+				sense = Constraints::get_sense_from_group_name(pest_scenario.get_prior_info().get_pi_rec_ptr(obj_name).get_group());
+				if ((sense.first != gt) && (sense.first != lt))
+					err_sense.push_back(obj_name);
+				else
+				{
+					if (sense.first == gt)
+					{
+						keep_pi.push_back(obj_name);
+						obj_sense_map[obj_name] = "maximize";
+						obj_dir_mult[obj_name] = -1.0;
+					}
+					else if (sense.first == lt)
+					{
+						keep_pi.push_back(obj_name);
+						obj_sense_map[obj_name] = "minimize";
+						obj_dir_mult[obj_name] = 1.0;
+					}
+
+				}
+			}
+		}
+		if (err_sense.size() > 0)
+		{
+			ss.str("");
+			ss << "the following non-zero weighted 'mou_objectives' do not have the correct obs group naming convention (needed to identify objective direction):";
+			for (auto e : err_sense)
+				ss << e << ";";
+			throw_moea_error(ss.str());
+		}
+		if (keep_obs.size() == 0)
+		{
+			throw_moea_error("none of the supplied observation-based 'mou_objectives' were found in the zero-weighted observations");
+		}
+
+		else if (missing.size() > 0)
+		{
+			ss.str("");
+			ss << "WARNING: the following mou_objectives were not found in the zero-weighted observations or prior info eqs: ";
+			for (auto m : missing)
+				ss << m << ",";
+			message(1, ss.str());
+
+		}
+		obs_obj_names = keep_obs;
+		pi_obj_names = keep_pi;
+	}
+
+	ss.str("");
+	ss << "...using the following observations as objectives: " << endl;
+	for (auto name : obs_obj_names)
+	{
+		ss << setw(30) << name << "   " << obj_sense_map[name] << endl;
+	}
+	file_manager.rec_ofstream() << ss.str();
+	cout << ss.str();
+
+	if (pi_obj_names.size() > 0)
+	{
+		ss.str("");
+		ss << "...using the following prior info eqs as objectives: " << endl;
+		for (auto name : pi_obj_names)
+		{
+			ss << setw(30) << name << "   " << obj_sense_map[name] << endl;
+		}
+		file_manager.rec_ofstream() << ss.str();
+		cout << ss.str();
+
+	}
+
+	if (obs_obj_names.size() + pi_obj_names.size() > 5)
+		message(1, "WARNING: more than 5 objectives, this is pushing the limits!");
+
+
+}
 
 pair<Parameters, Observations> MOEA::get_optimal_solution(ParameterEnsemble& _dp, ObservationEnsemble& _oe, bool use_mean)
 {
